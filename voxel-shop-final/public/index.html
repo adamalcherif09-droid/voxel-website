@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Voxel</title>
+  <!-- The whole site's layout (spacing, grids, rounded corners, etc.)
+       is built with Tailwind CSS utility classes. This loads Tailwind
+       directly in the browser and generates the matching styles on
+       the fly — no separate build step needed. -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div id="root"></div>
+
+  <!-- React itself, loaded straight from a CDN — no npm install, no build step. -->
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+
+  <!-- Lets the browser understand the JSX (the <LikeThis /> tags) in the
+       files below, on the fly, without a separate build step. -->
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <script>
+    // Load order matters here: each file uses things defined in the
+    // ones before it, so they're fetched and run one at a time, in
+    // this exact order. "runtime: classic" matters too — it tells
+    // Babel to turn <Tags /> into React.createElement(...) calls,
+    // which matches how React is loaded above (as a plain script,
+    // not as a module). Without it, the page would just stay blank.
+    var files = [
+      "/js/icons.js",
+      "/js/helpers.js",
+      "/js/components-common.js",
+      "/js/components-customer.js",
+      "/js/components-admin.js",
+      "/js/app.js",
+    ];
+
+    function loadNext(i) {
+      if (i >= files.length) return;
+      fetch(files[i])
+        .then(function (res) { return res.text(); })
+        .then(function (code) {
+          var transformed = Babel.transform(code, {
+            presets: [["react", { runtime: "classic" }]],
+            filename: files[i],
+          }).code;
+          (0, eval)(transformed);
+          loadNext(i + 1);
+        })
+        .catch(function (err) {
+          console.error("Failed to load " + files[i], err);
+          document.getElementById("root").innerHTML =
+            "<p style='padding:40px;font-family:sans-serif;color:#8c2e1e'>Something didn't load correctly (" +
+            files[i] + "). Check the browser console for details.</p>";
+        });
+    }
+    loadNext(0);
+  </script>
+</body>
+</html>

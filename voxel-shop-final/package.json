@@ -1,0 +1,14 @@
+{
+  "name": "voxel-3d-print-shop",
+  "version": "1.0.0",
+  "description": "Voxel — a 3D print shop website with a built-in owner dashboard.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "@replit/database": "^3.0.1",
+    "express": "^4.19.2",
+    "mongodb": "^7.5.0"
+  }
+}
