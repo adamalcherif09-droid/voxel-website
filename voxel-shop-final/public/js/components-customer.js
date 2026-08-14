@@ -38,6 +38,8 @@ function Footer(props) {
     }
   }
   var hasContact = content.contactPhone || content.contactEmail;
+  var mailtoUrl = buildMailtoUrl(content.contactEmail);
+  var telUrl = buildTelUrl(content.contactPhone);
   return (
     <footer style={{ borderTop: "1px solid var(--line)" }} className="mt-20">
       <div className="max-w-6xl mx-auto px-5 sm:px-8 py-8 flex flex-col sm:flex-row items-center justify-between gap-3 text-sm" style={{ color: "var(--ink-dim)" }}>
@@ -46,9 +48,9 @@ function Footer(props) {
         </span>
         {hasContact && (
           <span className="font-mono-ac text-xs">
-            {content.contactEmail}
+            {content.contactEmail && (mailtoUrl ? <a href={mailtoUrl} style={{ color: "inherit", textDecoration: "none" }}>{content.contactEmail}</a> : content.contactEmail)}
             {content.contactEmail && content.contactPhone ? " · " : ""}
-            {content.contactPhone}
+            {content.contactPhone && (telUrl ? <a href={telUrl} style={{ color: "inherit", textDecoration: "none" }}>{content.contactPhone}</a> : content.contactPhone)}
           </span>
         )}
       </div>
@@ -244,7 +246,7 @@ function CustomOrderView(props) {
       <p className="text-sm mt-2 max-w-md" style={{ color: "var(--ink-dim)" }}>{content.customPageSubtext}</p>
       {hasContact && (
         <p className="text-xs mt-2 font-mono-ac" style={{ color: "var(--ink-dim)" }}>
-          Or reach us directly — {content.contactEmail}{content.contactEmail && content.contactPhone ? " · " : ""}{content.contactPhone}
+          Or reach us directly — {content.contactEmail && (buildMailtoUrl(content.contactEmail) ? <a href={buildMailtoUrl(content.contactEmail)} style={{ color: "inherit" }}>{content.contactEmail}</a> : content.contactEmail)}{content.contactEmail && content.contactPhone ? " · " : ""}{content.contactPhone && (buildTelUrl(content.contactPhone) ? <a href={buildTelUrl(content.contactPhone)} style={{ color: "inherit" }}>{content.contactPhone}</a> : content.contactPhone)}
         </p>
       )}
 
@@ -325,9 +327,14 @@ function OrderContactPopup(props) {
   var _copyFailed = React.useState(false); var copyFailed = _copyFailed[0]; var setCopyFailed = _copyFailed[1];
   var textRef = React.useRef(null);
   var isCustom = item.type === "custom";
+  // WhatsApp and Instagram links can only pre-fill plain text — there is
+  // no way to attach the actual photo through them. Instead, for a
+  // catalog item, the message includes a link back to that exact model
+  // on the site, so opening it shows the name, price, and photo.
+  var modelLink = !isCustom && item.id ? (window.location.origin + "/?model=" + encodeURIComponent(item.id)) : "";
   var message = isCustom
     ? "Hi! I have a custom design I would like printed." + (item.fileName ? " File: " + item.fileName + "." : "") + (item.note ? " " + item.note : "")
-    : "Hi! I would like to order: " + item.name;
+    : "Hi! I would like to order: " + item.name + (modelLink ? " — " + modelLink : "");
   var waUrl = buildWhatsAppUrl(content.whatsappNumber, message);
   var igUrl = buildInstagramDmUrl(content.instagramHandle);
   var hasAny = waUrl || igUrl;

@@ -6,7 +6,7 @@
 var DEFAULT_CONTENT = {
   businessName: "Voxel",
   currencySymbol: "$",
-  logoImage: "",
+  logoImage: "/logo.png",
   contactPhone: "",
   contactEmail: "",
   whatsappNumber: "",
@@ -78,6 +78,20 @@ function buildInstagramDmUrl(handle) {
   var clean = (handle || "").trim().replace(/^@/, "");
   if (!clean) return null;
   return "https://ig.me/m/" + clean;
+}
+// Tapping a contact email opens the visitor's own mail app with a new
+// message already addressed to it.
+function buildMailtoUrl(email) {
+  var clean = (email || "").trim();
+  if (!clean) return null;
+  return "mailto:" + clean;
+}
+// Tapping a contact phone number opens the visitor's own phone app
+// with the number already filled in, ready to call.
+function buildTelUrl(phone) {
+  var digits = (phone || "").replace(/[^0-9+]/g, "");
+  if (!digits) return null;
+  return "tel:" + digits;
 }
 
 /* ---------------------------------------------------------

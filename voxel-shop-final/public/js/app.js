@@ -30,6 +30,17 @@ function App() {
       if (savedCatalog) {
         setCatalog({ categories: savedCatalog.categories || [], models: savedCatalog.models || [] });
         catalogPromise = Promise.resolve();
+        // If this page was opened from a link that points at one
+        // specific model (the seller tapping the link inside a
+        // WhatsApp order message, for example), open that model's
+        // photo/details automatically instead of just the home page.
+        try {
+          var sharedId = new URLSearchParams(window.location.search).get("model");
+          if (sharedId) {
+            var sharedModel = (savedCatalog.models || []).find(function (m) { return m.id === sharedId; });
+            if (sharedModel) setViewingModel(sharedModel);
+          }
+        } catch (e) { /* no query string support — just show the home page */ }
       } else {
         setCatalog({ categories: DEFAULT_CATEGORIES, models: [] });
         catalogPromise = storageSet("voxel-catalog", { categories: DEFAULT_CATEGORIES, models: [] });
@@ -110,7 +121,7 @@ function App() {
   }
 
   function openCatalogOrder(model) {
-    setOrderPopupItem({ type: "catalog", name: model.name });
+    setOrderPopupItem({ type: "catalog", id: model.id, name: model.name });
   }
   function handleCustomOrderNow(data) {
     setOrderPopupItem({ type: "custom", name: "Custom order", note: data.note, fileName: data.fileName });

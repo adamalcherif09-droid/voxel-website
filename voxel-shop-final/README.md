@@ -41,6 +41,28 @@ place to store that data in this order:
 4. Your catalog, settings, and inquiries now live in MongoDB Atlas —
    free, and they survive Render's free tier spinning down.
 
+## Making changes later — two very different kinds
+
+**Changes to your catalog, prices, photos, text on the page, contact
+info, colors of nothing — anything you can already do from the owner
+dashboard:** just do it there, on the live site. It saves straight to
+the database and shows up immediately for everyone. No file, no
+GitHub, no redeploying — this covers the vast majority of day-to-day
+changes (new models, new prices, editing the hero text, etc).
+
+**Changes to how the site actually works or looks structurally**
+(the kind that need editing the code itself — like this update did):
+1. Get the updated files (from me, or wherever you're making the edit).
+2. Go to your GitHub repo → open the file that changed → click the
+   pencil/edit icon (or use "Upload files" to overwrite it) → commit.
+3. Render watches that repo and redeploys automatically within a
+   minute or two of any commit — you don't need to touch Render at
+   all for this part. Just refresh the site once the deploy finishes.
+
+If you're ever unsure which kind of change something is, just ask —
+it's usually obvious ("change the price of this model" = dashboard;
+"change how the order button works" = code).
+
 ## Getting into the owner dashboard
 
 Click your business name in the footer 5 times quickly, enter the

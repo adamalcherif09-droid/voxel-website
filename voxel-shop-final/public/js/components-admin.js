@@ -172,8 +172,6 @@ function ModelForm(props) {
         if (json.status !== "success" || !json.data) throw new Error("no data");
         var d = json.data;
         var gotAnything = false;
-        if (d.title) { setName(d.title); gotAnything = true; }
-        if (d.description) { setDescription(d.description); gotAnything = true; }
         if (d.image && d.image.url) { setImage(d.image.url); gotAnything = true; }
         if (!gotAnything) throw new Error("empty");
         setFetchedOk(true);
@@ -201,7 +199,7 @@ function ModelForm(props) {
   return (
     <div className="p-5 rounded-lg mb-4 flex flex-col gap-4" style={{ background: "var(--panel-2)", border: "1px solid var(--line)" }}>
       <label className="flex flex-col gap-1.5 text-sm" style={{ color: "var(--ink)" }}>
-        Paste a link to auto-fill (MakerWorld, Printables, etc.)
+        Paste a link to pull in its photo (MakerWorld, Printables, etc.)
         <div className="flex gap-2">
           <input
             value={sourceUrl}
@@ -218,7 +216,7 @@ function ModelForm(props) {
       </label>
       {fetchError && <span className="text-xs" style={{ color: "var(--danger)" }}>{fetchError}</span>}
       {fetchedOk && !fetchError && (
-        <span className="text-xs" style={{ color: "var(--teal)" }}>Filled in below — check it over, then set a price and category.</span>
+        <span className="text-xs" style={{ color: "var(--teal)" }}>Photo filled in below — write the name, description, and price yourself.</span>
       )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
