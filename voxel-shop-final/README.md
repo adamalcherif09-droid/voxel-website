@@ -63,6 +63,27 @@ If you're ever unsure which kind of change something is, just ask —
 it's usually obvious ("change the price of this model" = dashboard;
 "change how the order button works" = code).
 
+## Bulk-importing designs from Thingiverse (optional)
+
+Dashboard → Catalog → "Search by keyword" lets you pull in many
+models at once by searching Thingiverse (e.g. "toys and fidgets"),
+sorted by popularity — instead of adding them one link at a time.
+Results are filtered to only ones whose license allows commercial
+use (selling prints), and each one gets the original designer
+credited automatically. This is separate from — and doesn't replace
+— the existing "Import from JSON" box for pasting in your own
+collected list; both work independently.
+
+To turn this on:
+1. Go to thingiverse.com/developers and create a free "app" — this
+   gives you an "App Token".
+2. In Render, go to your service → Environment → add a variable
+   named `THINGIVERSE_TOKEN` with that token as the value. Redeploy.
+
+Without this set, that search box will show a message telling you
+it's not connected yet — everything else on the site works fine
+either way.
+
 ## Getting into the owner dashboard
 
 Click your business name in the footer 5 times quickly, enter the

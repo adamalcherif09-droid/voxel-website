@@ -277,6 +277,12 @@ function AdminCatalog(props) {
   var _importing = React.useState(false); var importing = _importing[0]; var setImporting = _importing[1];
   var _importError = React.useState(""); var importError = _importError[0]; var setImportError = _importError[1];
   var _importSummary = React.useState(""); var importSummary = _importSummary[0]; var setImportSummary = _importSummary[1];
+  var _showTvSearch = React.useState(false); var showTvSearch = _showTvSearch[0]; var setShowTvSearch = _showTvSearch[1];
+  var _tvTerm = React.useState(""); var tvTerm = _tvTerm[0]; var setTvTerm = _tvTerm[1];
+  var _tvCount = React.useState(30); var tvCount = _tvCount[0]; var setTvCount = _tvCount[1];
+  var _tvSearching = React.useState(false); var tvSearching = _tvSearching[0]; var setTvSearching = _tvSearching[1];
+  var _tvError = React.useState(""); var tvError = _tvError[0]; var setTvError = _tvError[1];
+  var _tvSummary = React.useState(""); var tvSummary = _tvSummary[0]; var setTvSummary = _tvSummary[1];
 
   React.useEffect(function () {
     if (categories.length === 0) {
@@ -388,6 +394,42 @@ function AdminCatalog(props) {
     processNext();
   }
 
+  // Searches Thingiverse for the typed keyword and drops the results
+  // straight into the Bulk Import box above, so they go through the
+  // exact same review-then-import step as anything pasted in by hand
+  // — nothing gets added to the live catalog without that click.
+  function handleThingiverseSearch() {
+    if (!tvTerm.trim()) return;
+    setTvSearching(true);
+    setTvError("");
+    setTvSummary("");
+    var url = "/api/thingiverse-search?q=" + encodeURIComponent(tvTerm.trim()) + "&limit=" + encodeURIComponent(tvCount);
+    fetch(url)
+      .then(function (r) { return r.json().then(function (body) { return { ok: r.ok, body: body }; }); })
+      .then(function (res) {
+        setTvSearching(false);
+        if (!res.ok) {
+          setTvError(res.body && res.body.error ? res.body.error : "Search failed — try again.");
+          return;
+        }
+        var results = res.body.results || [];
+        if (results.length === 0) {
+          setTvError("No commercially-licensed results found for \"" + tvTerm.trim() + "\". Try a different search term.");
+          return;
+        }
+        setJsonText(JSON.stringify(results, null, 2));
+        setShowImport(true);
+        var parts = ["Found " + results.length + " model" + (results.length === 1 ? "" : "s") + " with a commercial-use license."];
+        if (res.body.skippedLicense) parts.push(res.body.skippedLicense + " skipped (license doesn't allow commercial use, or wasn't specified).");
+        parts.push("Review below, then click \"Import models.\"");
+        setTvSummary(parts.join(" "));
+      })
+      .catch(function () {
+        setTvSearching(false);
+        setTvError("Couldn't reach the search — check your connection and try again.");
+      });
+  }
+
   return (
     <div className="flex flex-col gap-12">
       <section>
@@ -422,6 +464,43 @@ function AdminCatalog(props) {
           <input value={newCatName} onChange={function (e) { setNewCatName(e.target.value); }} placeholder="New category name" className="flex-1 px-3.5 py-2.5 rounded-md text-sm" style={{ background: "var(--panel)", border: "1px solid var(--line)", color: "var(--ink)" }} />
           <PrimaryButton icon={Plus} onClick={function () { if (newCatName.trim()) { props.addCategory(newCatName.trim()); setNewCatName(""); } }}>Add</PrimaryButton>
         </div>
+      </section>
+
+      <section>
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="font-display text-lg" style={{ color: "var(--ink)" }}>Search Thingiverse</h3>
+          <SecondaryButton onClick={function () { setShowTvSearch(function (s) { return !s; }); }}>{showTvSearch ? "Hide" : "Search by keyword"}</SecondaryButton>
+        </div>
+        {showTvSearch && (
+          <div className="p-4 rounded-md flex flex-col gap-3" style={{ background: "var(--panel-2)", border: "1px solid var(--line)" }}>
+            <p className="text-sm" style={{ color: "var(--ink-dim)" }}>
+              Search Thingiverse by keyword and pull in the most popular results at once, instead of adding links one by one. Only results whose license allows commercial use are kept — this is a best-effort filter, not legal advice, so it's still worth a quick look before selling prints of anything. Each imported design's description automatically credits the original designer and links back to it.
+            </p>
+            <div className="flex flex-col sm:flex-row gap-2">
+              <input
+                value={tvTerm}
+                onChange={function (e) { setTvTerm(e.target.value); }}
+                onKeyDown={function (e) { if (e.key === "Enter" && !tvSearching) handleThingiverseSearch(); }}
+                placeholder="e.g. toys and fidgets"
+                className="flex-1 px-3.5 py-2.5 rounded-md text-sm"
+                style={{ background: "var(--panel)", border: "1px solid var(--line)", color: "var(--ink)" }}
+              />
+              <select
+                value={tvCount}
+                onChange={function (e) { setTvCount(Number(e.target.value)); }}
+                className="px-3 py-2.5 rounded-md text-sm"
+                style={{ background: "var(--panel)", border: "1px solid var(--line)", color: "var(--ink)" }}
+              >
+                <option value={15}>15 results</option>
+                <option value={30}>30 results</option>
+                <option value={60}>60 results</option>
+              </select>
+              <PrimaryButton onClick={handleThingiverseSearch} disabled={tvSearching || !tvTerm.trim()}>{tvSearching ? "Searching…" : "Search"}</PrimaryButton>
+            </div>
+            {tvError && <span className="text-xs" style={{ color: "var(--danger)" }}>{tvError}</span>}
+            {tvSummary && !tvError && <span className="text-xs" style={{ color: "var(--teal)" }}>{tvSummary}</span>}
+          </div>
+        )}
       </section>
 
       <section>
