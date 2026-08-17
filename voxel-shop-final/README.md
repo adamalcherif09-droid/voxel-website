@@ -84,6 +84,35 @@ Without this set, that search box will show a message telling you
 it's not connected yet — everything else on the site works fine
 either way.
 
+## Contact & social links in the footer
+
+Dashboard → Content → fill in any of: WhatsApp number, Instagram
+username, TikTok username, Facebook username/page, phone, email.
+Whichever ones you fill in show up as links in the site's footer.
+Tapping the phone number opens a WhatsApp chat (not a phone call) —
+that's on purpose, since that's how most customers actually want to
+reach out.
+
+## Built-in print pricing calculator
+
+Dashboard → Settings → "Print pricing calculator" sets your rates
+(electricity, PLA price per gram, machine wear, your own time).
+Everything is always priced as PLA — no other material option.
+
+Once set, Dashboard → Catalog → Add/edit a model has "Filament
+weight" and "Print time" fields — fill those in from your slicer and
+the price fills itself in automatically, still fully editable
+afterward. Pasting several models in at once (Bulk Import, or a
+Thingiverse search result) works the same way if the entry includes
+`grams`/`printHours`/`printMinutes` — a plain Thingiverse search
+result generally won't include these (Thingiverse's API doesn't
+provide slicer estimates), but your own bookmarklet-collected JSON
+can, if it's set up to grab that from the page.
+
+Changing your rates later only affects models you add from that
+point on — anything already in your catalog keeps its existing
+price untouched, exactly like the standalone calculator.
+
 ## Getting into the owner dashboard
 
 Click your business name in the footer 5 times quickly, enter the

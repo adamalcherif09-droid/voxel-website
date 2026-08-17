@@ -11,6 +11,8 @@ var DEFAULT_CONTENT = {
   contactEmail: "",
   whatsappNumber: "",
   instagramHandle: "",
+  tiktokHandle: "",
+  facebookHandle: "",
   heroEyebrow: "Custom 3D Printing",
   heroHeadlineLine1: "Precision prints,",
   heroHeadlineLine2: "made to order.",
@@ -79,6 +81,38 @@ function buildInstagramDmUrl(handle) {
   if (!clean) return null;
   return "https://ig.me/m/" + clean;
 }
+// Same formula as the standalone pricing calculator — always priced as
+// PLA, since that's what everything gets printed in here. Returns a
+// price in USD, or null if there isn't enough info (no grams and no
+// time) to calculate anything yet.
+function calculatePrintPriceUSD(grams, hours, minutes, pricing) {
+  var g = Math.max(0, Number(grams) || 0);
+  var h = Math.max(0, Number(hours) || 0);
+  var m = Math.max(0, Number(minutes) || 0);
+  if (g === 0 && h === 0 && m === 0) return null;
+  var p = pricing || DEFAULT_SETTINGS.pricing;
+  var totalHours = h + (m / 60);
+  var materialCost = g * (p.plaPricePerGram || 0);
+  var printElectricityCost = 0.14 * totalHours * (p.electricityRate || 0);
+  var startupHeatingCost = 0.4 * (5 / 60) * (p.electricityRate || 0);
+  var machineWearCost = totalHours * (p.machineWearRate || 0);
+  var laborCost = totalHours * (p.laborRate || 0);
+  return materialCost + printElectricityCost + startupHeatingCost + machineWearCost + laborCost;
+}
+// TikTok/Facebook don't have a "start a chat" link the way WhatsApp and
+// Instagram do — these open the profile/page itself. On a phone with the
+// app installed, tapping these opens the app directly to that page;
+// otherwise they open the web version in a browser.
+function buildTiktokUrl(handle) {
+  var clean = (handle || "").trim().replace(/^@/, "");
+  if (!clean) return null;
+  return "https://www.tiktok.com/@" + clean;
+}
+function buildFacebookUrl(handle) {
+  var clean = (handle || "").trim().replace(/^@/, "").replace(/^https?:\/\/(www\.)?facebook\.com\//i, "");
+  if (!clean) return null;
+  return "https://www.facebook.com/" + clean;
+}
 // Tapping a contact email opens the visitor's own mail app with a new
 // message already addressed to it.
 function buildMailtoUrl(email) {
@@ -118,6 +152,12 @@ var DEFAULT_SECURITY = {
 var DEFAULT_SETTINGS = {
   webhookUrl: "",
   security: DEFAULT_SECURITY,
+  pricing: {
+    electricityRate: 0.35,
+    plaPricePerGram: 0.03,
+    machineWearRate: 2.5,
+    laborRate: 1.0,
+  },
 };
 
 /* ---------------------------------------------------------

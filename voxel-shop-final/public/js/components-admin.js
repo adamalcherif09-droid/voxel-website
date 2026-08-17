@@ -143,6 +143,9 @@ function ModelForm(props) {
   var _name = React.useState(model.name || ""); var name = _name[0]; var setName = _name[1];
   var _description = React.useState(model.description || ""); var description = _description[0]; var setDescription = _description[1];
   var _price = React.useState(model.price || ""); var price = _price[0]; var setPrice = _price[1];
+  var _grams = React.useState(model.grams || ""); var grams = _grams[0]; var setGrams = _grams[1];
+  var _printHours = React.useState(model.printHours || ""); var printHours = _printHours[0]; var setPrintHours = _printHours[1];
+  var _printMinutes = React.useState(model.printMinutes || ""); var printMinutes = _printMinutes[0]; var setPrintMinutes = _printMinutes[1];
   var _categoryId = React.useState(model.categoryId || (categories[0] ? categories[0].id : "")); var categoryId = _categoryId[0]; var setCategoryId = _categoryId[1];
   var _image = React.useState(model.image || ""); var image = _image[0]; var setImage = _image[1];
   var _featured = React.useState(!!model.featured); var featured = _featured[0]; var setFeatured = _featured[1];
@@ -182,6 +185,12 @@ function ModelForm(props) {
       .finally(function () { setFetching(false); });
   }
 
+  var pricing = (props.settings && props.settings.pricing) || DEFAULT_SETTINGS.pricing;
+  function handleWeightOrTimeChange(nextGrams, nextHours, nextMinutes) {
+    var calculated = calculatePrintPriceUSD(nextGrams, nextHours, nextMinutes, pricing);
+    if (calculated !== null) setPrice(calculated.toFixed(2));
+  }
+
   function handleImage(e) {
     var f = e.target.files && e.target.files[0];
     if (!f) return;
@@ -193,7 +202,7 @@ function ModelForm(props) {
   }
   function handleSave() {
     if (!name.trim()) return;
-    props.onSave({ id: model.id, name: name.trim(), description: description.trim(), price: price, categoryId: categoryId, image: image, featured: featured });
+    props.onSave({ id: model.id, name: name.trim(), description: description.trim(), price: price, categoryId: categoryId, image: image, featured: featured, grams: grams, printHours: printHours, printMinutes: printMinutes });
   }
 
   return (
@@ -236,6 +245,24 @@ function ModelForm(props) {
         Description (optional)
         <textarea value={description} onChange={function (e) { setDescription(e.target.value); }} rows={2} className="px-3 py-2 rounded-md text-sm resize-none" style={{ background: "var(--panel)", border: "1px solid var(--line)", color: "var(--ink)" }} />
       </label>
+
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <label className="flex flex-col gap-1.5 text-sm" style={{ color: "var(--ink)" }}>
+          Filament weight (g)
+          <input type="number" min={0} step="1" value={grams} onChange={function (e) { var v = e.target.value; setGrams(v); handleWeightOrTimeChange(v, printHours, printMinutes); }} className="px-3 py-2 rounded-md text-sm" style={{ background: "var(--panel)", border: "1px solid var(--line)", color: "var(--ink)" }} />
+        </label>
+        <label className="flex flex-col gap-1.5 text-sm" style={{ color: "var(--ink)" }}>
+          Print hours
+          <input type="number" min={0} step="1" value={printHours} onChange={function (e) { var v = e.target.value; setPrintHours(v); handleWeightOrTimeChange(grams, v, printMinutes); }} className="px-3 py-2 rounded-md text-sm" style={{ background: "var(--panel)", border: "1px solid var(--line)", color: "var(--ink)" }} />
+        </label>
+        <label className="flex flex-col gap-1.5 text-sm" style={{ color: "var(--ink)" }}>
+          Print minutes
+          <input type="number" min={0} max={59} step="1" value={printMinutes} onChange={function (e) { var v = e.target.value; setPrintMinutes(v); handleWeightOrTimeChange(grams, printHours, v); }} className="px-3 py-2 rounded-md text-sm" style={{ background: "var(--panel)", border: "1px solid var(--line)", color: "var(--ink)" }} />
+        </label>
+      </div>
+      <p className="text-xs -mt-2" style={{ color: "var(--ink-dim)" }}>
+        Fill these in from your slicer and the price below fills itself in — priced as PLA, using the rates set in Settings. Still fully editable if you want to round it or adjust it by hand.
+      </p>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <label className="flex flex-col gap-1.5 text-sm" style={{ color: "var(--ink)" }}>
@@ -365,14 +392,23 @@ function AdminCatalog(props) {
         }
       }
       compressDataUrl(entry.image || "").then(function (compressedImage) {
+        var pricing = (props.settings && props.settings.pricing) || DEFAULT_SETTINGS.pricing;
+        var priceToUse = entry.price || "";
+        if (!priceToUse) {
+          var calculated = calculatePrintPriceUSD(entry.grams, entry.printHours, entry.printMinutes, pricing);
+          if (calculated !== null) priceToUse = calculated.toFixed(2);
+        }
         toAdd.push({
           id: entry.id || makeId("model"),
           name: String(entry.name).trim(),
           description: (entry.description || "").trim(),
-          price: entry.price || "",
+          price: priceToUse,
           categoryId: categoryId,
           image: compressedImage,
           featured: !!entry.featured,
+          grams: entry.grams || "",
+          printHours: entry.printHours || "",
+          printMinutes: entry.printMinutes || "",
           createdAt: entry.createdAt || Date.now(),
         });
         processNext();
@@ -551,6 +587,7 @@ function AdminCatalog(props) {
             model={editingModel}
             categories={categories}
             content={content}
+            settings={props.settings}
             onCancel={function () { setEditingModel(null); }}
             onSave={function (data) { if (data.id) { props.updateModel(data.id, data); } else { props.addModel(data); } setEditingModel(null); }}
           />
@@ -660,6 +697,17 @@ function AdminContent(props) {
       </section>
 
       <section>
+        <h3 className="font-display text-lg mb-4" style={{ color: "var(--ink)" }}>Social links (shown in the footer)</h3>
+        <p className="text-sm mb-3" style={{ color: "var(--ink-dim)" }}>
+          Fill in any of these and a link appears in the footer — tapping it opens that app directly (or its website if the app isn't installed). Your WhatsApp number and Instagram username above are reused here too, so you don't need to enter those twice.
+        </p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <Field label="TikTok username (no @)" field="tiktokHandle" placeholder="yourbusiness" />
+          <Field label="Facebook username or page name" field="facebookHandle" placeholder="yourbusiness" />
+        </div>
+      </section>
+
+      <section>
         <h3 className="font-display text-lg mb-4" style={{ color: "var(--ink)" }}>Contact information (shown on the site)</h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Field label="Phone" field="contactPhone" placeholder="+961 ..." />
@@ -727,6 +775,7 @@ function AdminContent(props) {
 function AdminSettings(props) {
   var settings = props.settings;
   var security = settings.security || DEFAULT_SECURITY;
+  var pricing = settings.pricing || DEFAULT_SETTINGS.pricing;
   var _webhookUrl = React.useState(settings.webhookUrl || ""); var webhookUrl = _webhookUrl[0]; var setWebhookUrl = _webhookUrl[1];
   var _pingSent = React.useState(false); var pingSent = _pingSent[0]; var setPingSent = _pingSent[1];
   var _comboBuilder = React.useState([]); var comboBuilder = _comboBuilder[0]; var setComboBuilder = _comboBuilder[1];
@@ -735,6 +784,11 @@ function AdminSettings(props) {
   var _showPasscode = React.useState(false); var showPasscode = _showPasscode[0]; var setShowPasscode = _showPasscode[1];
   var _secMsg = React.useState(""); var secMsg = _secMsg[0]; var setSecMsg = _secMsg[1];
   var _savingPasscode = React.useState(false); var savingPasscode = _savingPasscode[0]; var setSavingPasscode = _savingPasscode[1];
+  var _electricityRate = React.useState(pricing.electricityRate); var electricityRate = _electricityRate[0]; var setElectricityRate = _electricityRate[1];
+  var _plaPricePerGram = React.useState(pricing.plaPricePerGram); var plaPricePerGram = _plaPricePerGram[0]; var setPlaPricePerGram = _plaPricePerGram[1];
+  var _machineWearRate = React.useState(pricing.machineWearRate); var machineWearRate = _machineWearRate[0]; var setMachineWearRate = _machineWearRate[1];
+  var _laborRate = React.useState(pricing.laborRate); var laborRate = _laborRate[0]; var setLaborRate = _laborRate[1];
+  var _pricingMsg = React.useState(""); var pricingMsg = _pricingMsg[0]; var setPricingMsg = _pricingMsg[1];
 
   function flashSec(msg) {
     setSecMsg(msg);
@@ -777,6 +831,20 @@ function AdminSettings(props) {
   }
   function saveWebhook() {
     props.updateSettings(function (prev) { var next = Object.assign({}, prev); next.webhookUrl = webhookUrl; return next; });
+  }
+  function savePricing() {
+    props.updateSettings(function (prev) {
+      var next = Object.assign({}, prev);
+      next.pricing = {
+        electricityRate: Math.max(0, Number(electricityRate) || 0),
+        plaPricePerGram: Math.max(0, Number(plaPricePerGram) || 0),
+        machineWearRate: Math.max(0, Number(machineWearRate) || 0),
+        laborRate: Math.max(0, Number(laborRate) || 0),
+      };
+      return next;
+    });
+    setPricingMsg("Saved — new models will use these rates from now on. Anything already in your catalog keeps its existing price.");
+    setTimeout(function () { setPricingMsg(""); }, 4000);
   }
   function testPing() {
     pingDiscord(webhookUrl, "This is a test ping from your website.").then(function () {
@@ -875,6 +943,36 @@ function AdminSettings(props) {
           {pingSent && <span className="text-xs" style={{ color: "var(--teal)" }}>Sent — check Discord.</span>}
         </div>
       </section>
+
+      <section>
+        <h3 className="font-display text-lg mb-2" style={{ color: "var(--ink)" }}>Print pricing calculator</h3>
+        <p className="text-sm mb-4" style={{ color: "var(--ink-dim)" }}>
+          When you fill in a model's filament weight and print time (in Catalog, or when importing several at once), the price gets calculated automatically from the rates below — always as PLA. Changing these only affects models you add from now on; anything already in your catalog keeps whatever price it already has.
+        </p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+          <label className="flex flex-col gap-1.5 text-sm" style={{ color: "var(--ink)" }}>
+            Electricity rate ($/kWh)
+            <input type="number" min={0} step="0.01" value={electricityRate} onChange={function (e) { setElectricityRate(e.target.value); }} className="px-3 py-2 rounded-md text-sm" style={{ background: "var(--panel)", border: "1px solid var(--line)", color: "var(--ink)" }} />
+          </label>
+          <label className="flex flex-col gap-1.5 text-sm" style={{ color: "var(--ink)" }}>
+            PLA price ($ per gram)
+            <input type="number" min={0} step="0.001" value={plaPricePerGram} onChange={function (e) { setPlaPricePerGram(e.target.value); }} className="px-3 py-2 rounded-md text-sm" style={{ background: "var(--panel)", border: "1px solid var(--line)", color: "var(--ink)" }} />
+          </label>
+          <label className="flex flex-col gap-1.5 text-sm" style={{ color: "var(--ink)" }}>
+            Machine wear ($/hour)
+            <input type="number" min={0} step="0.1" value={machineWearRate} onChange={function (e) { setMachineWearRate(e.target.value); }} className="px-3 py-2 rounded-md text-sm" style={{ background: "var(--panel)", border: "1px solid var(--line)", color: "var(--ink)" }} />
+          </label>
+          <label className="flex flex-col gap-1.5 text-sm" style={{ color: "var(--ink)" }}>
+            Your own time ($/hour)
+            <input type="number" min={0} step="0.1" value={laborRate} onChange={function (e) { setLaborRate(e.target.value); }} className="px-3 py-2 rounded-md text-sm" style={{ background: "var(--panel)", border: "1px solid var(--line)", color: "var(--ink)" }} />
+          </label>
+        </div>
+        <p className="text-xs mb-3" style={{ color: "var(--ink-dim)" }}>
+          PLA price tip: spool price ÷ spool weight in grams — e.g. a $20, 1kg spool is $20 ÷ 1000 = 0.02.
+        </p>
+        <SecondaryButton onClick={savePricing}>Save pricing</SecondaryButton>
+        {pricingMsg && <p className="text-xs mt-3" style={{ color: "var(--teal)" }}>{pricingMsg}</p>}
+      </section>
     </div>
   );
 }
@@ -912,7 +1010,7 @@ function AdminView(props) {
       {props.tab === "orders" && <AdminInquiries inquiries={props.inquiries} />}
       {props.tab === "catalog" && (
         <AdminCatalog categories={props.categories} models={props.models} addCategory={props.addCategory} renameCategory={props.renameCategory} deleteCategory={props.deleteCategory}
-          addModel={props.addModel} updateModel={props.updateModel} deleteModel={props.deleteModel} toggleFeatured={props.toggleFeatured} importModels={props.importModels} content={content} />
+          addModel={props.addModel} updateModel={props.updateModel} deleteModel={props.deleteModel} toggleFeatured={props.toggleFeatured} importModels={props.importModels} content={content} settings={props.settings} />
       )}
       {props.tab === "content" && <AdminContent content={content} updateContent={props.updateContent} />}
       {props.tab === "settings" && <AdminSettings settings={props.settings} updateSettings={props.updateSettings} />}

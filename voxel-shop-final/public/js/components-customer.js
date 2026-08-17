@@ -37,21 +37,31 @@ function Footer(props) {
       props.onTrigger();
     }
   }
-  var hasContact = content.contactPhone || content.contactEmail;
   var mailtoUrl = buildMailtoUrl(content.contactEmail);
-  var telUrl = buildTelUrl(content.contactPhone);
+  // The phone number in the footer opens a WhatsApp chat instead of the
+  // phone's dialer — that's how customers actually want to reach out.
+  // Prefers the dedicated WhatsApp number if it's set, otherwise falls
+  // back to the general contact phone number.
+  var whatsappDisplayNumber = content.contactPhone || content.whatsappNumber;
+  var whatsappFooterUrl = buildWhatsAppUrl(content.whatsappNumber || content.contactPhone, "Hi! I have a question.");
+  var instagramUrl = buildInstagramDmUrl(content.instagramHandle);
+  var tiktokUrl = buildTiktokUrl(content.tiktokHandle);
+  var facebookUrl = buildFacebookUrl(content.facebookHandle);
+  var hasAnything = content.contactEmail || whatsappDisplayNumber || instagramUrl || tiktokUrl || facebookUrl;
   return (
     <footer style={{ borderTop: "1px solid var(--line)" }} className="mt-20">
       <div className="max-w-6xl mx-auto px-5 sm:px-8 py-8 flex flex-col sm:flex-row items-center justify-between gap-3 text-sm" style={{ color: "var(--ink-dim)" }}>
         <span onClick={handleSecretClick} style={{ cursor: "default", userSelect: "none" }}>
           {content.businessName} — {content.footerTagline}
         </span>
-        {hasContact && (
-          <span className="font-mono-ac text-xs">
+        {hasAnything && (
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 font-mono-ac text-xs">
             {content.contactEmail && (mailtoUrl ? <a href={mailtoUrl} style={{ color: "inherit", textDecoration: "none" }}>{content.contactEmail}</a> : content.contactEmail)}
-            {content.contactEmail && content.contactPhone ? " · " : ""}
-            {content.contactPhone && (telUrl ? <a href={telUrl} style={{ color: "inherit", textDecoration: "none" }}>{content.contactPhone}</a> : content.contactPhone)}
-          </span>
+            {whatsappDisplayNumber && (whatsappFooterUrl ? <a href={whatsappFooterUrl} target="_blank" rel="noopener noreferrer" style={{ color: "inherit", textDecoration: "none" }}>{whatsappDisplayNumber}</a> : whatsappDisplayNumber)}
+            {instagramUrl && <a href={instagramUrl} target="_blank" rel="noopener noreferrer" style={{ color: "inherit", textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 4 }}><Instagram size={14} />Instagram</a>}
+            {tiktokUrl && <a href={tiktokUrl} target="_blank" rel="noopener noreferrer" style={{ color: "inherit", textDecoration: "none" }}>TikTok</a>}
+            {facebookUrl && <a href={facebookUrl} target="_blank" rel="noopener noreferrer" style={{ color: "inherit", textDecoration: "none" }}>Facebook</a>}
+          </div>
         )}
       </div>
     </footer>
@@ -234,7 +244,7 @@ function CustomOrderView(props) {
     props.onOrderNow({ fileName: file.name, note: notes.trim() });
   }
 
-  var hasContact = content.contactPhone || content.contactEmail;
+  var hasContact = content.contactPhone || content.contactEmail || content.whatsappNumber;
 
   return (
     <div className="max-w-2xl mx-auto px-5 sm:px-8 py-10">
@@ -246,7 +256,7 @@ function CustomOrderView(props) {
       <p className="text-sm mt-2 max-w-md" style={{ color: "var(--ink-dim)" }}>{content.customPageSubtext}</p>
       {hasContact && (
         <p className="text-xs mt-2 font-mono-ac" style={{ color: "var(--ink-dim)" }}>
-          Or reach us directly — {content.contactEmail && (buildMailtoUrl(content.contactEmail) ? <a href={buildMailtoUrl(content.contactEmail)} style={{ color: "inherit" }}>{content.contactEmail}</a> : content.contactEmail)}{content.contactEmail && content.contactPhone ? " · " : ""}{content.contactPhone && (buildTelUrl(content.contactPhone) ? <a href={buildTelUrl(content.contactPhone)} style={{ color: "inherit" }}>{content.contactPhone}</a> : content.contactPhone)}
+          Or reach us directly — {content.contactEmail && (buildMailtoUrl(content.contactEmail) ? <a href={buildMailtoUrl(content.contactEmail)} style={{ color: "inherit" }}>{content.contactEmail}</a> : content.contactEmail)}{content.contactEmail && (content.contactPhone || content.whatsappNumber) ? " · " : ""}{(content.contactPhone || content.whatsappNumber) && (buildWhatsAppUrl(content.whatsappNumber || content.contactPhone, "Hi! I have a question.") ? <a href={buildWhatsAppUrl(content.whatsappNumber || content.contactPhone, "Hi! I have a question.")} target="_blank" rel="noopener noreferrer" style={{ color: "inherit" }}>{content.contactPhone || content.whatsappNumber}</a> : (content.contactPhone || content.whatsappNumber))}
         </p>
       )}
 
