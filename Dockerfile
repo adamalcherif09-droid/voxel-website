@@ -16,6 +16,11 @@ RUN apt-get update && apt-get install -y \
 RUN pipx install conan==2.7.1 && pipx ensurepath
 ENV PATH="/root/.local/bin:${PATH}"
 
+# This registers Ultimaker's own Conan remote/config (needed for
+# CuraEngine's internal "sentrylibrary" python_requires dependency,
+# which isn't on the public Conan Center) - missing this step is what
+# caused the first build attempt to fail.
+RUN conan config install https://github.com/ultimaker/conan-config.git
 RUN conan profile detect --force
 
 # --- Build CuraEngine ---
