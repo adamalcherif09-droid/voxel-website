@@ -189,13 +189,13 @@
     var baseline = null;
     var target = { x: 0, y: 0 };
     var current = { x: 0, y: 0 };
-    /* Tuned for real phones: strong enough to be clearly noticeable,
-       still capped and smoothed so normal hand movement can't swing
-       cards chaotically (the original 20deg/x0.7 did exactly that).
-       A ~25 degree wrist turn now reaches the full 10 degree card tilt. */
-    var MAX_TILT = 10;
-    var SENSITIVITY = 0.4;
-    var LERP = 0.12;
+    /* Tuned for real phones: punchy and immediately noticeable — a
+       small wrist turn (~16 degrees from rest) now swings cards the
+       full angle. Still hard-capped and smoothed so hand tremor reads
+       as gentle motion, never the wild swinging of the first version. */
+    var MAX_TILT = 16;
+    var SENSITIVITY = 1.0;
+    var LERP = 0.14;
     var looping = false;
     var retagPending = false;
 
@@ -352,9 +352,9 @@
       var rect = card.getBoundingClientRect();
       var px = (e.clientX - rect.left) / rect.width;
       var py = (e.clientY - rect.top) / rect.height;
-      var rotateY = (px - 0.5) * 28;
-      var rotateX = (0.5 - py) * 28;
-      card.style.transform = "perspective(500px) rotateX(" + rotateX.toFixed(2) + "deg) rotateY(" + rotateY.toFixed(2) + "deg) translateY(-4px)";
+      var rotateY = (px - 0.5) * 40;
+      var rotateX = (0.5 - py) * 40;
+      card.style.transform = "perspective(500px) rotateX(" + rotateX.toFixed(2) + "deg) rotateY(" + rotateY.toFixed(2) + "deg) translateY(-6px)";
     }, { passive: true });
     document.addEventListener("pointerout", function (e) {
       var card = e.target.closest && e.target.closest(TILT_SELECTOR);
