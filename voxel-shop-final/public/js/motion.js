@@ -179,6 +179,8 @@
      reading. Calibrates against whatever angle the phone is first held
      at, so it reacts to *changes* in tilt rather than an absolute angle
      that assumes the phone starts out perfectly flat. */
+  var retagGyroTargets = null;
+
   function initDeviceTilt() {
     if (hasFinePointer) return; // desktop already gets cursor tilt
     if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
@@ -187,9 +189,33 @@
     var baseline = null;
     var target = { x: 0, y: 0 };
     var current = { x: 0, y: 0 };
-    var MAX_TILT = 20;
-    var LERP = 0.16;
+    /* Tuned for real phones (was 20deg / x0.7 / lerp 0.16): normal hand
+       movement while scrolling was swinging every card up to the full
+       20 degrees with near-instant snapping — disorienting in real use.
+       A gentle max angle plus heavier smoothing keeps it subtle. */
+    var MAX_TILT = 5;
+    var SENSITIVITY = 0.25;
+    var LERP = 0.09;
     var looping = false;
+    var retagPending = false;
+
+    /* Only elements physically large enough to read as cards rotate
+       with the phone — at small-button size (Order now, modal close,
+       header CTA, WhatsApp link) even a gentle 3D warp looks wrong,
+       so those keep their flat look. Re-runs whenever React swaps
+       views, since cards render dynamically. */
+    function tagGyroTargets() {
+      if (retagPending) return;
+      retagPending = true;
+      requestAnimationFrame(function () {
+        retagPending = false;
+        document.querySelectorAll(".voxel-tilt, .cat-tile-accent").forEach(function (el) {
+          var rect = el.getBoundingClientRect();
+          if (rect.width >= 110 && rect.height >= 90) el.classList.add("voxel-gyro-target");
+          else el.classList.remove("voxel-gyro-target");
+        });
+      });
+    }
 
     function loop() {
       current.x += (target.x - current.x) * LERP;
@@ -204,14 +230,16 @@
       if (!baseline) baseline = { beta: e.beta, gamma: e.gamma };
       var dBeta = e.beta - baseline.beta;
       var dGamma = e.gamma - baseline.gamma;
-      target.x = Math.max(-MAX_TILT, Math.min(MAX_TILT, -dBeta * 0.7));
-      target.y = Math.max(-MAX_TILT, Math.min(MAX_TILT, dGamma * 0.7));
+      target.x = Math.max(-MAX_TILT, Math.min(MAX_TILT, -dBeta * SENSITIVITY));
+      target.y = Math.max(-MAX_TILT, Math.min(MAX_TILT, dGamma * SENSITIVITY));
       if (!looping) { looping = true; loop(); }
     }
 
     function start() {
       window.addEventListener("deviceorientation", onOrientation);
       document.documentElement.classList.add("voxel-gyro-active");
+      tagGyroTargets();
+      retagGyroTargets = tagGyroTargets;
     }
 
     var needsPermission = typeof DeviceOrientationEvent !== "undefined" &&
@@ -420,6 +448,7 @@
           scanForReveals(node);
           initImageBlurUp(node);
           initMagneticButtons();
+          if (retagGyroTargets) retagGyroTargets();
 
           if (node.parentElement && node.parentElement.tagName === "MAIN") {
             var hasBack = node.querySelectorAll
