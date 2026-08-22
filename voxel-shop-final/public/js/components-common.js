@@ -4,7 +4,7 @@ function BrandMark(props) {
     <svg width={size} height={size} viewBox="0 0 32 32" fill="none" aria-hidden="true">
       <rect className="voxel-mark-bar voxel-mark-1" x="4" y="22" width="24" height="4" rx="1.5" fill="var(--brass)" />
       <rect className="voxel-mark-bar voxel-mark-2" x="8" y="15" width="16" height="4" rx="1.5" fill="var(--brass)" opacity="0.78" />
-      <rect className="voxel-mark-bar" x="12" y="8" width="8" height="4" rx="1.5" fill="var(--brass)" opacity="0.55" />
+      <rect className="voxel-mark-bar voxel-mark-3" x="12" y="8" width="8" height="4" rx="1.5" fill="var(--brass)" opacity="0.55" />
     </svg>
   );
 }
@@ -50,9 +50,9 @@ function PrimaryButton(props) {
       type={type}
       onClick={props.onClick}
       disabled={props.disabled}
-      className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-md text-sm font-medium border-0 cursor-pointer"
+      className={"inline-flex items-center justify-center gap-2 px-5 py-3 rounded-md text-sm font-medium border-0 cursor-pointer" + (props.disabled ? "" : " liquid-glass tint-brass voxel-magnetic")}
       style={{
-        background: props.disabled ? "var(--line)" : "var(--brass)",
+        background: props.disabled ? "var(--line)" : undefined,
         color: props.disabled ? "var(--ink-dim)" : "#161618",
         opacity: props.disabled ? 0.7 : 1,
       }}

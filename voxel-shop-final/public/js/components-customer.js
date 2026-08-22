@@ -12,7 +12,7 @@ function Header(props) {
           <span className="font-display text-xl tracking-tight" style={{ color: "var(--ink)", marginLeft: "-2px" }}>{content.businessName}</span>
         </button>
         <nav className="flex items-center gap-3 sm:gap-4">
-          <button onClick={props.goCustom} className="flex items-center gap-1.5 px-3.5 py-2 rounded-md border-0 cursor-pointer text-sm font-medium" style={{ background: "var(--brass)", color: "#161618" }}>
+          <button onClick={props.goCustom} className="glass-accent tint-brass voxel-magnetic flex items-center gap-1.5 px-3.5 py-2 rounded-md border-0 cursor-pointer text-sm font-medium" style={{ color: "#161618" }}>
             <UploadCloud size={16} />
             <span className="hidden sm:inline">Custom print</span>
           </button>
@@ -49,7 +49,7 @@ function Footer(props) {
   var facebookUrl = buildFacebookUrl(content.facebookHandle);
   var hasAnything = content.contactEmail || whatsappDisplayNumber || instagramUrl || tiktokUrl || facebookUrl;
   return (
-    <footer style={{ borderTop: "1px solid var(--line)" }} className="mt-20">
+    <footer className="mt-20 liquid-glass">
       <div className="max-w-6xl mx-auto px-5 sm:px-8 py-8 flex flex-col sm:flex-row items-center justify-between gap-3 text-sm" style={{ color: "var(--ink-dim)" }}>
         <span onClick={handleSecretClick} style={{ cursor: "default", userSelect: "none" }}>
           {content.businessName} — {content.footerTagline}
@@ -74,7 +74,7 @@ function ModelCard(props) {
   return (
     <div
       onClick={props.onView}
-      className="rounded-lg overflow-hidden flex flex-col cursor-pointer"
+      className={"voxel-tilt rounded-lg overflow-hidden flex flex-col cursor-pointer"}
       style={{ background: "var(--panel)", border: props.highlight ? "1px solid var(--brass)" : "1px solid var(--line)" }}
     >
       <div className="flex items-center justify-center" style={{ background: "var(--panel-2)", minHeight: model.image ? undefined : 140 }}>
@@ -95,8 +95,8 @@ function ModelCard(props) {
           </span>
           <button
             onClick={function (e) { e.stopPropagation(); props.onOrder(); }}
-            className="text-xs sm:text-sm font-medium px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-md cursor-pointer border-0"
-            style={{ background: "var(--teal)", color: "var(--canvas)" }}
+            className="liquid-glass tint-teal text-xs sm:text-sm font-medium px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-md cursor-pointer border-0"
+            style={{ color: "var(--canvas)" }}
           >
             Order now
           </button>
@@ -141,11 +141,10 @@ function HomeView(props) {
 
       <section className="pb-14">
         <Eyebrow>{content.categoriesEyebrow}</Eyebrow>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+        <div className="cat-shelf liquid-glass grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
           <button
             onClick={function () { props.goCategory(ALL_DESIGNS_CATEGORY); }}
-            className="col-span-2 text-left p-5 rounded-lg cursor-pointer border-0"
-            style={{ background: "var(--brass-soft)", border: "1px solid var(--brass)" }}
+            className="glass-accent tint-brass cat-tile-accent col-span-2 text-left p-5 cursor-pointer border-0"
           >
             <Layers size={20} style={{ color: "var(--brass-text)" }} />
             <div className="font-display text-lg mt-3" style={{ color: "var(--ink)" }}>All Designs</div>
@@ -156,7 +155,7 @@ function HomeView(props) {
           {categories.map(function (c) {
             var count = models.filter(function (m) { return m.categoryId === c.id; }).length;
             return (
-              <button key={c.id} onClick={function () { props.goCategory(c); }} className="text-left p-5 rounded-lg cursor-pointer border-0" style={{ background: "var(--panel)", border: "1px solid var(--line)" }}>
+              <button key={c.id} onClick={function () { props.goCategory(c); }} className="glass-accent cat-tile-accent text-left p-5 cursor-pointer border-0">
                 <Layers size={18} style={{ color: "var(--brass-text)" }} />
                 <div className="font-display text-base mt-3" style={{ color: "var(--ink)" }}>{c.name}</div>
                 <div className="text-xs mt-1 font-mono-ac" style={{ color: "var(--ink-dim)" }}>
@@ -307,9 +306,9 @@ function ModelDetailPopup(props) {
           </div>
           <button
             onClick={props.onClose}
-            className="cursor-pointer border-0"
+            className="liquid-glass liquid-glass--round cursor-pointer border-0"
             aria-label="Close"
-            style={{ position: "absolute", top: 12, right: 12, width: 32, height: 32, borderRadius: "50%", background: "rgba(22,22,24,0.55)", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center" }}
+            style={{ position: "absolute", top: 12, right: 12, width: 32, height: 32, background: "rgba(22,22,24,0.35)", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center" }}
           >
             <X size={16} />
           </button>
@@ -410,8 +409,8 @@ function OrderContactPopup(props) {
                 target="_blank"
                 rel="noopener noreferrer"
                 onClick={handleWhatsAppClick}
-                className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-md text-sm font-medium w-full"
-                style={{ background: "var(--brass)", color: "#161618", textDecoration: "none" }}
+                className="liquid-glass tint-brass inline-flex items-center justify-center gap-2 px-5 py-3 rounded-md text-sm font-medium w-full"
+                style={{ color: "#161618", textDecoration: "none" }}
               >
                 <MessageCircle size={16} />
                 Message on WhatsApp
