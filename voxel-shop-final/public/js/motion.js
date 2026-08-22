@@ -39,6 +39,13 @@
     }, { passive: true });
   }
 
+  /* Cursor-only effects (3D tilt, magnetic pull) don't belong on touch —
+     touch fires the same pointermove events during a normal scroll drag,
+     which would make cards visibly wobble as a finger passes over them
+     and can leave them stuck mid-tilt after the scroll ends. Gate both
+     behind an actual hover-capable pointer (mouse/trackpad). */
+  var hasFinePointer = window.matchMedia && window.matchMedia("(hover: hover) and (pointer: fine)").matches;
+
   /* ---------- Magnetic buttons ----------
      Continuous rAF loop per button: lerps its transform toward the
      cursor offset while hovered, and back toward (0,0) once the
@@ -46,6 +53,7 @@
      reading the current target each frame rather than committing to
      a fixed-duration animation. */
   function initMagneticButtons() {
+    if (!hasFinePointer) return;
     var MAX_PULL = 10;
     var LERP = 0.18;
     document.querySelectorAll(".voxel-magnetic").forEach(function (btn) {
@@ -163,6 +171,71 @@
     }
   }
 
+  /* ---------- Device-tilt cards (mobile gyroscope) ----------
+     Mobile equivalent of the desktop cursor-tilt: physically tilting
+     the phone rotates the cards instead of the cursor doing it.
+     A shared CSS custom property (updated once per frame) drives every
+     card at once, rather than looping through them all on each sensor
+     reading. Calibrates against whatever angle the phone is first held
+     at, so it reacts to *changes* in tilt rather than an absolute angle
+     that assumes the phone starts out perfectly flat. */
+  function initDeviceTilt() {
+    if (hasFinePointer) return; // desktop already gets cursor tilt
+    if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    if (!window.DeviceOrientationEvent) return;
+
+    var baseline = null;
+    var target = { x: 0, y: 0 };
+    var current = { x: 0, y: 0 };
+    var MAX_TILT = 10;
+    var LERP = 0.12;
+    var looping = false;
+
+    function loop() {
+      current.x += (target.x - current.x) * LERP;
+      current.y += (target.y - current.y) * LERP;
+      document.documentElement.style.setProperty("--gyro-x", current.x.toFixed(2) + "deg");
+      document.documentElement.style.setProperty("--gyro-y", current.y.toFixed(2) + "deg");
+      requestAnimationFrame(loop);
+    }
+
+    function onOrientation(e) {
+      if (e.beta === null || e.gamma === null) return;
+      if (!baseline) baseline = { beta: e.beta, gamma: e.gamma };
+      var dBeta = e.beta - baseline.beta;
+      var dGamma = e.gamma - baseline.gamma;
+      target.x = Math.max(-MAX_TILT, Math.min(MAX_TILT, -dBeta * 0.4));
+      target.y = Math.max(-MAX_TILT, Math.min(MAX_TILT, dGamma * 0.4));
+      if (!looping) { looping = true; loop(); }
+    }
+
+    function start() {
+      window.addEventListener("deviceorientation", onOrientation);
+      document.documentElement.classList.add("voxel-gyro-active");
+    }
+
+    var needsPermission = typeof DeviceOrientationEvent !== "undefined" &&
+      typeof DeviceOrientationEvent.requestPermission === "function";
+
+    if (!needsPermission) {
+      start();
+      return;
+    }
+
+    // iOS 13+ only allows this to be requested from a direct tap.
+    var btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "voxel-tilt-permission";
+    btn.textContent = "✨ Enable tilt effect";
+    btn.addEventListener("click", function () {
+      DeviceOrientationEvent.requestPermission().then(function (state) {
+        if (state === "granted") start();
+        btn.remove();
+      }).catch(function () { btn.remove(); });
+    });
+    document.body.appendChild(btn);
+  }
+
   var boundHeader = null;
 
   function initHeaderGlass() {
@@ -241,6 +314,7 @@
 
   /* ---------- 3D tilt cards ---------- */
   function initTiltCards() {
+    if (!hasFinePointer) return;
     var TILT_SELECTOR = ".voxel-tilt, .cat-tile-accent";
     document.addEventListener("pointermove", function (e) {
       var card = e.target.closest && e.target.closest(TILT_SELECTOR);
@@ -363,6 +437,7 @@
     injectDistortionFilter();
     initSpecularTracking();
     initTiltCards();
+    initDeviceTilt();
     initHeroParallax();
     initRootWatcher();
     initMagneticButtons();
