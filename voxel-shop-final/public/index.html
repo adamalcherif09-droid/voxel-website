@@ -31,16 +31,21 @@
   <meta name="twitter:image" content="https://voxel-website.onrender.com/logo.png" />
 
   <!-- The whole site's layout (spacing, grids, rounded corners, etc.)
-       is built with Tailwind CSS utility classes. This loads Tailwind
-       directly in the browser and generates the matching styles on
-       the fly — no separate build step needed.
-       Self-hosted (public/js/tailwind.js) instead of cdn.tailwindcss.com:
-       on some phones the outside CDN was blocked or dropped (content
-       blockers / carrier filtering), which silently removed every layout
-       utility and collapsed the whole mobile layout into a jumbled
-       single column. Served from our own site it can't be blocked. -->
-  <script src="/js/tailwind.js"></script>
+       is built with Tailwind CSS utility classes. These live in
+       public/tailwind.css — a small pre-built static stylesheet
+       generated from the class names used in this file and in js/
+       (see tailwind.config.js + tailwind-input.css in the project
+       root if it ever needs regenerating).
+       History: Tailwind used to compile these styles in the browser
+       at page-load time via a big script (first cdn.tailwindcss.com,
+       then self-hosted as /js/tailwind.js). That runtime compiler
+       crashed on some iPhone browsers, silently removing every layout
+       rule and collapsing the mobile layout into a jumbled pile. A
+       plain static CSS file has nothing to execute, so it works
+       everywhere. Loaded after styles.css to keep the same cascade
+       order the old runtime-injected styles had. -->
   <link rel="stylesheet" href="/styles.css" />
+  <link rel="stylesheet" href="/tailwind.css" />
 </head>
 <body>
   <div id="root"></div>
