@@ -189,13 +189,13 @@
     var baseline = null;
     var target = { x: 0, y: 0 };
     var current = { x: 0, y: 0 };
-    /* Tuned for real phones (was 20deg / x0.7 / lerp 0.16): normal hand
-       movement while scrolling was swinging every card up to the full
-       20 degrees with near-instant snapping — disorienting in real use.
-       A gentle max angle plus heavier smoothing keeps it subtle. */
-    var MAX_TILT = 5;
-    var SENSITIVITY = 0.25;
-    var LERP = 0.09;
+    /* Tuned for real phones: strong enough to be clearly noticeable,
+       still capped and smoothed so normal hand movement can't swing
+       cards chaotically (the original 20deg/x0.7 did exactly that).
+       A ~25 degree wrist turn now reaches the full 10 degree card tilt. */
+    var MAX_TILT = 10;
+    var SENSITIVITY = 0.4;
+    var LERP = 0.12;
     var looping = false;
     var retagPending = false;
 
@@ -352,8 +352,8 @@
       var rect = card.getBoundingClientRect();
       var px = (e.clientX - rect.left) / rect.width;
       var py = (e.clientY - rect.top) / rect.height;
-      var rotateY = (px - 0.5) * 20;
-      var rotateX = (0.5 - py) * 20;
+      var rotateY = (px - 0.5) * 28;
+      var rotateX = (0.5 - py) * 28;
       card.style.transform = "perspective(500px) rotateX(" + rotateX.toFixed(2) + "deg) rotateY(" + rotateY.toFixed(2) + "deg) translateY(-4px)";
     }, { passive: true });
     document.addEventListener("pointerout", function (e) {
