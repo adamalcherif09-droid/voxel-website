@@ -187,8 +187,8 @@
     var baseline = null;
     var target = { x: 0, y: 0 };
     var current = { x: 0, y: 0 };
-    var MAX_TILT = 10;
-    var LERP = 0.12;
+    var MAX_TILT = 20;
+    var LERP = 0.16;
     var looping = false;
 
     function loop() {
@@ -204,8 +204,8 @@
       if (!baseline) baseline = { beta: e.beta, gamma: e.gamma };
       var dBeta = e.beta - baseline.beta;
       var dGamma = e.gamma - baseline.gamma;
-      target.x = Math.max(-MAX_TILT, Math.min(MAX_TILT, -dBeta * 0.4));
-      target.y = Math.max(-MAX_TILT, Math.min(MAX_TILT, dGamma * 0.4));
+      target.x = Math.max(-MAX_TILT, Math.min(MAX_TILT, -dBeta * 0.7));
+      target.y = Math.max(-MAX_TILT, Math.min(MAX_TILT, dGamma * 0.7));
       if (!looping) { looping = true; loop(); }
     }
 
@@ -227,7 +227,9 @@
     btn.type = "button";
     btn.className = "voxel-tilt-permission";
     btn.textContent = "✨ Enable tilt effect";
+    var autoHide = setTimeout(function () { btn.remove(); }, 8000);
     btn.addEventListener("click", function () {
+      clearTimeout(autoHide);
       DeviceOrientationEvent.requestPermission().then(function (state) {
         if (state === "granted") start();
         btn.remove();
@@ -322,9 +324,9 @@
       var rect = card.getBoundingClientRect();
       var px = (e.clientX - rect.left) / rect.width;
       var py = (e.clientY - rect.top) / rect.height;
-      var rotateY = (px - 0.5) * 10;
-      var rotateX = (0.5 - py) * 10;
-      card.style.transform = "perspective(600px) rotateX(" + rotateX.toFixed(2) + "deg) rotateY(" + rotateY.toFixed(2) + "deg) translateY(-4px)";
+      var rotateY = (px - 0.5) * 20;
+      var rotateX = (0.5 - py) * 20;
+      card.style.transform = "perspective(500px) rotateX(" + rotateX.toFixed(2) + "deg) rotateY(" + rotateY.toFixed(2) + "deg) translateY(-4px)";
     }, { passive: true });
     document.addEventListener("pointerout", function (e) {
       var card = e.target.closest && e.target.closest(TILT_SELECTOR);

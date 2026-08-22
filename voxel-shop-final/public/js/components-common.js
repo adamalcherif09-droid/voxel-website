@@ -50,7 +50,7 @@ function PrimaryButton(props) {
       type={type}
       onClick={props.onClick}
       disabled={props.disabled}
-      className={"inline-flex items-center justify-center gap-2 px-5 py-3 rounded-md text-sm font-medium border-0 cursor-pointer" + (props.disabled ? "" : " liquid-glass tint-brass voxel-magnetic")}
+      className={"inline-flex items-center justify-center gap-2 px-5 py-3 rounded-md text-sm font-medium border-0 cursor-pointer" + (props.disabled ? "" : " liquid-glass tint-brass voxel-magnetic voxel-tilt")}
       style={{
         background: props.disabled ? "var(--line)" : undefined,
         color: props.disabled ? "var(--ink-dim)" : "#161618",

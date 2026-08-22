@@ -12,7 +12,7 @@ function Header(props) {
           <span className="font-display text-xl tracking-tight" style={{ color: "var(--ink)", marginLeft: "-2px" }}>{content.businessName}</span>
         </button>
         <nav className="flex items-center gap-3 sm:gap-4">
-          <button onClick={props.goCustom} className="glass-accent tint-brass voxel-magnetic flex items-center gap-1.5 px-3.5 py-2 rounded-md border-0 cursor-pointer text-sm font-medium" style={{ color: "#161618" }}>
+          <button onClick={props.goCustom} className="glass-accent tint-brass voxel-magnetic voxel-tilt flex items-center gap-1.5 px-3.5 py-2 rounded-md border-0 cursor-pointer text-sm font-medium" style={{ color: "#161618" }}>
             <UploadCloud size={16} />
             <span className="hidden sm:inline">Custom print</span>
           </button>
@@ -95,7 +95,7 @@ function ModelCard(props) {
           </span>
           <button
             onClick={function (e) { e.stopPropagation(); props.onOrder(); }}
-            className="liquid-glass tint-teal text-xs sm:text-sm font-medium px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-md cursor-pointer border-0"
+            className="liquid-glass tint-teal voxel-tilt text-xs sm:text-sm font-medium px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-md cursor-pointer border-0"
             style={{ color: "var(--canvas)" }}
           >
             Order now
@@ -306,7 +306,7 @@ function ModelDetailPopup(props) {
           </div>
           <button
             onClick={props.onClose}
-            className="liquid-glass liquid-glass--round cursor-pointer border-0"
+            className="liquid-glass liquid-glass--round voxel-tilt cursor-pointer border-0"
             aria-label="Close"
             style={{ position: "absolute", top: 12, right: 12, width: 32, height: 32, background: "rgba(22,22,24,0.35)", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center" }}
           >
@@ -409,7 +409,7 @@ function OrderContactPopup(props) {
                 target="_blank"
                 rel="noopener noreferrer"
                 onClick={handleWhatsAppClick}
-                className="liquid-glass tint-brass inline-flex items-center justify-center gap-2 px-5 py-3 rounded-md text-sm font-medium w-full"
+                className="liquid-glass tint-brass voxel-tilt inline-flex items-center justify-center gap-2 px-5 py-3 rounded-md text-sm font-medium w-full"
                 style={{ color: "#161618", textDecoration: "none" }}
               >
                 <MessageCircle size={16} />
