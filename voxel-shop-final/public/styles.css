@@ -88,9 +88,346 @@ html, body {
   .voxel-masonry-item { margin-bottom: 16px; }
 }
 
+/* ============ MOTION SYSTEM (Stage 1) ============ */
+
+/* Header glass-on-scroll */
+header {
+  position: relative;
+  transition: background-color 0.35s ease, backdrop-filter 0.35s ease, box-shadow 0.35s ease, border-color 0.35s ease;
+}
+header.voxel-glass {
+  background-color: rgba(213, 196, 186, 0.72) !important;
+  backdrop-filter: blur(14px) saturate(150%);
+  -webkit-backdrop-filter: blur(14px) saturate(150%);
+  border-bottom-color: transparent !important;
+  border-top: 1px solid rgba(255,255,255,0.35);
+  box-shadow: 0 8px 24px rgba(22,22,24,0.08);
+}
+/* scroll-edge fade instead of a hard divider line under the glass header */
+header.voxel-glass::after {
+  content: "";
+  position: absolute;
+  left: 0; right: 0; bottom: -12px;
+  height: 12px;
+  background: linear-gradient(to bottom, rgba(22,22,24,0.06), transparent);
+  pointer-events: none;
+}
+
+/* Hero display type — negative tracking + tight leading at large size only
+   (small .font-display text elsewhere is left at 0 tracking, per spec). */
+h1.voxel-reveal {
+  letter-spacing: -0.02em;
+  line-height: 1.05;
+}
+
+/* Hero word-by-word reveal */
+.voxel-word {
+  display: inline-block;
+  overflow: hidden;
+  vertical-align: top;
+}
+.voxel-word-inner {
+  display: inline-block;
+  transform: translateY(110%);
+  opacity: 0;
+  animation: voxelWordIn 0.7s cubic-bezier(.2,.7,.2,1) forwards;
+}
+@keyframes voxelWordIn {
+  to { transform: translateY(0); opacity: 1; }
+}
+
+/* Scroll-triggered section/card reveals */
+.voxel-observe {
+  opacity: 0;
+  transform: translateY(18px);
+  transition: opacity 0.6s cubic-bezier(.2,.7,.2,1), transform 0.6s cubic-bezier(.2,.7,.2,1);
+  transition-delay: var(--stagger, 0ms);
+}
+.voxel-observe.voxel-in-view {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Card hover — 3D tilt driven by JS (pointer position), CSS just
+   supplies the perspective/transition base and the image zoom. */
+.voxel-tilt, .cat-tile-accent {
+  transform-style: preserve-3d;
+  transition: transform 0.25s cubic-bezier(.2,.7,.2,1), box-shadow 0.35s ease;
+  will-change: transform;
+}
+.voxel-tilt:hover, .cat-tile-accent:hover {
+  box-shadow: 0 14px 30px rgba(22,22,24,0.14);
+}
+.voxel-tilt img {
+  transition: transform 0.5s cubic-bezier(.2,.7,.2,1);
+}
+.voxel-tilt:hover img {
+  transform: scale(1.06);
+}
+
+/* Hero parallax — shift set by motion.js on scroll */
+.voxel-parallax {
+  transform: translateY(var(--hero-shift, 0px));
+}
+
+/* Image blur-up on load */
+.voxel-img-blur {
+  filter: blur(16px);
+  transform: scale(1.04);
+  opacity: 0;
+  transition: filter 0.6s ease, transform 0.6s ease, opacity 0.6s ease;
+}
+.voxel-img-blur.voxel-img-loaded {
+  filter: blur(0);
+  transform: scale(1);
+  opacity: 1;
+}
+
+/* Spring-like button/card press feedback — critically damped, no overshoot:
+   a tap isn't a momentum gesture, so no bounce (per apple-design's
+   damping-1.0 "move/reposition" default). Feedback fires on press, not release. */
+button {
+  transition: transform 0.15s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+button:active {
+  transform: scale(0.96);
+}
+
+/* Modal spring-in entrance + blurred backdrop */
+.voxel-modal-overlay {
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  animation: voxelOverlayIn 0.3s ease both;
+}
+@keyframes voxelOverlayIn {
+  from { backdrop-filter: blur(0px); -webkit-backdrop-filter: blur(0px); }
+}
+.voxel-modal-overlay > div {
+  animation: voxelModalIn 0.4s cubic-bezier(.2,.85,.35,1.25) both;
+}
+@keyframes voxelModalIn {
+  from { transform: scale(0.92) translateY(10px); opacity: 0; }
+  to { transform: scale(1) translateY(0); opacity: 1; }
+}
+
+/* Page-switch transitions — directional: pushing into a deeper view
+   (category/custom-order, which have a Back button) slides in from the
+   right; returning to a view without one (home) slides in from the left. */
+.voxel-page-fade {
+  animation: voxelPageFade 0.4s ease both;
+}
+@keyframes voxelPageFade {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.voxel-page-push {
+  animation: voxelPagePush 0.4s cubic-bezier(.2,.7,.2,1) both;
+}
+.voxel-page-pop {
+  animation: voxelPagePop 0.4s cubic-bezier(.2,.7,.2,1) both;
+}
+@keyframes voxelPagePush {
+  from { opacity: 0; transform: translateX(24px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+@keyframes voxelPagePop {
+  from { opacity: 0; transform: translateX(-24px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+/* Copy-to-clipboard success flash */
+.voxel-success-flash {
+  animation: voxelSuccessFlash 0.7s ease;
+}
+@keyframes voxelSuccessFlash {
+  0% { box-shadow: inset 0 0 0 999px rgba(15,33,43,0); }
+  30% { box-shadow: inset 0 0 0 999px rgba(15,110,73,0.22); }
+  100% { box-shadow: inset 0 0 0 999px rgba(15,33,43,0); }
+}
+
+/* ============ LIQUID GLASS SYSTEM (Stage 2) ============ */
+/* Rules followed here (liquid-glass + apple-design skills):
+   - Glass goes on controls/navigation/chrome only, never on content
+     (product photos stay fully opaque — untouched below).
+   - Glass cannot sample glass: elements nested inside an already-glass
+     parent use .glass-accent (tint + rim + specular, no own blur) instead
+     of a second independent .liquid-glass blur layer.
+   - Materialize, don't just fade: blur ramps in via a dedicated
+     keyframe/active-state rather than appearing instantly.
+   - SVG feDisplacementMap gives real refraction; plain blur is the
+     universal fallback for browsers that don't support filter references
+     inside backdrop-filter (feature-tested via @supports below). */
+
+.liquid-glass, .glass-accent {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+}
+
+.liquid-glass {
+  background: rgba(255,255,255,0.14);
+  backdrop-filter: blur(16px) saturate(160%);
+  -webkit-backdrop-filter: blur(16px) saturate(160%);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.45),
+    inset 0 0 0 1px rgba(255,255,255,0.10),
+    0 8px 20px rgba(22,22,24,0.10);
+  transition: box-shadow 0.25s ease, backdrop-filter 0.2s ease, transform 0.15s cubic-bezier(0.2,0.8,0.2,1);
+}
+@supports (backdrop-filter: url(#x)) {
+  .liquid-glass { backdrop-filter: url(#voxel-glass-distortion) blur(6px) saturate(160%); }
+}
+.liquid-glass:active {
+  backdrop-filter: blur(24px) saturate(185%);
+  -webkit-backdrop-filter: blur(24px) saturate(185%);
+}
+@supports (backdrop-filter: url(#x)) {
+  .liquid-glass:active { backdrop-filter: url(#voxel-glass-distortion) blur(11px) saturate(185%); }
+}
+.liquid-glass--round { border-radius: 50%; }
+
+/* Nested-in-glass content (category tiles sitting on the glass shelf,
+   the header's CTA sitting on the glass header) — tint/rim/specular
+   only, no independent blur layer of its own. */
+.glass-accent {
+  background: rgba(255,255,255,0.10);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.32),
+    inset 0 0 0 1px rgba(255,255,255,0.06);
+  transition: background 0.2s ease, transform 0.15s cubic-bezier(0.2,0.8,0.2,1);
+}
+
+.tint-brass { background: linear-gradient(160deg, rgba(181,135,99,0.45), rgba(181,135,99,0.22)); }
+.tint-teal  { background: linear-gradient(160deg, rgba(15,33,43,0.55), rgba(15,33,43,0.32)); }
+
+/* Cursor-tracked specular highlight — position driven by --mx/--my,
+   set by motion.js on pointermove. Vibrancy rule: text stays a solid
+   color (untouched inline styles); only the surface gets the sheen. */
+.liquid-glass::before, .glass-accent::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(120px circle at var(--mx, 50%) var(--my, 0%), rgba(255,255,255,0.35), transparent 60%);
+  opacity: 0;
+  transition: opacity 0.25s ease;
+  pointer-events: none;
+}
+.liquid-glass:hover::before, .glass-accent:hover::before,
+.liquid-glass:focus-visible::before, .glass-accent:focus-visible::before { opacity: 1; }
+
+/* Category "shelf" — the one shared glass container; individual tiles
+   are .glass-accent so they read as content sitting on the shelf,
+   not each their own glass island (rule: glass can't sample glass). */
+.cat-shelf {
+  padding: 14px;
+  border-radius: 16px;
+  /* Overrides the shared overflow:hidden — tiles inside tilt on hover
+     and would get clipped at the shelf's edge otherwise. Modern
+     browsers already clip backdrop-filter to border-radius on their
+     own, so this loses no visual rounding. */
+  overflow: visible;
+}
+.cat-tile-accent { border-radius: 10px; }
+
+/* Magnetic buttons — cursor-lean handled entirely in JS (continuous
+   rAF lerp toward the pointer, decaying back to rest), no CSS transition
+   needed here since JS drives every frame directly. */
+.voxel-magnetic { will-change: transform; display: inline-flex; }
+
+/* Draggable modal dismiss handle */
+.voxel-drag-handle {
+  width: 36px;
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(22,22,24,0.18);
+  margin: 10px auto 0;
+  cursor: grab;
+  touch-action: none;
+}
+.voxel-drag-handle:active { cursor: grabbing; }
+
+/* Signature loading animation — logo bars build bottom-to-top like a
+   printer laying down layers. Animates transform only, never opacity:
+   the bars' layered look (1 / 0.78 / 0.55) is a static SVG attribute
+   that a competing opacity keyframe would flatten to 1 on completion. */
+.voxel-mark-bar {
+  transform-origin: center;
+  animation: voxelBarIn 0.55s cubic-bezier(0.34,1.4,0.4,1) both;
+}
+.voxel-mark-1 { animation-delay: 0.05s; }
+.voxel-mark-2 { animation-delay: 0.15s; }
+.voxel-mark-3 { animation-delay: 0.25s; }
+@keyframes voxelBarIn {
+  from { transform: translateY(10px) scaleX(0.5); }
+  to   { transform: translateY(0) scaleX(1); }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .voxel-reveal, .voxel-fade { animation: none !important; clip-path: none !important; opacity: 1 !important; transform: none !important; }
   .voxel-mark-bar { transition: none !important; }
   .voxel-shake { animation: none !important; }
   .skeleton-shimmer { animation: none !important; background: var(--panel) !important; }
+
+  header { transition: none !important; }
+  .voxel-word-inner { animation: none !important; transform: none !important; opacity: 1 !important; }
+  .voxel-observe { opacity: 1 !important; transform: none !important; transition: none !important; }
+  .voxel-masonry-item > div, .voxel-masonry-item img { transition: none !important; }
+  .voxel-masonry-item > div:hover, .voxel-masonry-item > div:hover img { transform: none !important; }
+  .voxel-tilt, .cat-tile-accent { transition: none !important; transform: none !important; }
+  .voxel-tilt:hover, .cat-tile-accent:hover { transform: none !important; }
+  .voxel-parallax { transform: none !important; }
+  .voxel-img-blur { filter: none !important; transform: none !important; opacity: 1 !important; transition: none !important; }
+  button { transition: none !important; }
+  button:active { transform: none !important; }
+  .voxel-modal-overlay, .voxel-modal-overlay > div { animation: none !important; }
+  .voxel-page-fade, .voxel-page-push, .voxel-page-pop { animation: none !important; opacity: 1 !important; transform: none !important; }
+  .voxel-success-flash { animation: none !important; }
+
+  .voxel-mark-bar { animation: none !important; transform: none !important; }
+  .liquid-glass, .glass-accent { transition: none !important; }
+  .liquid-glass:active { backdrop-filter: blur(16px) saturate(160%) !important; -webkit-backdrop-filter: blur(16px) saturate(160%) !important; }
+  .voxel-magnetic { transform: none !important; }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  header.voxel-glass {
+    background-color: var(--canvas) !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+  .voxel-modal-overlay {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    background-color: rgba(22,22,24,0.85) !important;
+  }
+
+  .liquid-glass, .glass-accent {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    background: var(--panel) !important;
+  }
+  .cat-shelf { background: var(--panel-2) !important; }
+  .cat-tile-accent { background: var(--panel) !important; border: 1px solid var(--line) !important; }
+  .tint-brass { background: var(--brass) !important; }
+  .tint-teal { background: var(--teal) !important; }
+  .liquid-glass::before, .glass-accent::before { display: none !important; }
+}
+
+@media (prefers-contrast: more) {
+  header.voxel-glass {
+    border-bottom: 1px solid var(--ink) !important;
+    border-top: none;
+    box-shadow: none;
+  }
+  header.voxel-glass::after { display: none; }
+
+  .liquid-glass, .glass-accent {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    border: 1px solid var(--ink) !important;
+    box-shadow: none !important;
+  }
+  .liquid-glass::before, .glass-accent::before { display: none !important; }
+  .tint-brass { background: var(--brass) !important; }
+  .tint-teal { background: var(--teal) !important; }
 }
