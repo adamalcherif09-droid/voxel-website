@@ -366,19 +366,22 @@ button:active {
 
 /* Device-tilt (gyroscope) cards — mobile equivalent of the desktop
    cursor tilt. --gyro-x/--gyro-y are updated once per frame by
-   motion.js and drive every card at once. */
-.voxel-gyro-active .voxel-tilt,
-.voxel-gyro-active .cat-tile-accent {
+   motion.js and drive every card at once. Only elements motion.js has
+   tagged .voxel-gyro-target respond (large cards/tiles); small buttons
+   stay flat so they don't warp while the phone is being held. */
+.voxel-gyro-active .voxel-gyro-target {
   transform: perspective(500px) rotateX(var(--gyro-x, 0deg)) rotateY(var(--gyro-y, 0deg));
-  transition: transform 0.05s linear;
+  transition: transform 0.1s ease-out;
 }
 
 .voxel-tilt-permission {
   position: fixed;
   left: 50%;
-  top: 76px;
+  /* Below the sticky header (~93px tall with the logo), not overlapping
+     it — at top:76px the pill's upper half was hidden behind the header. */
+  top: 104px;
   transform: translateX(-50%);
-  z-index: 25;
+  z-index: 40;
   padding: 10px 16px;
   border-radius: 999px;
   border: 0;
@@ -416,7 +419,7 @@ button:active {
   .voxel-modal-overlay, .voxel-modal-overlay > div { animation: none !important; }
   .voxel-page-fade, .voxel-page-push, .voxel-page-pop { animation: none !important; opacity: 1 !important; transform: none !important; }
   .voxel-success-flash { animation: none !important; }
-  .voxel-gyro-active .voxel-tilt, .voxel-gyro-active .cat-tile-accent { transform: none !important; transition: none !important; }
+  .voxel-gyro-active .voxel-gyro-target { transform: none !important; transition: none !important; }
   .voxel-tilt-permission { animation: none !important; }
 
   .voxel-mark-bar { animation: none !important; transform: none !important; }

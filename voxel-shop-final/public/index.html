@@ -33,8 +33,13 @@
   <!-- The whole site's layout (spacing, grids, rounded corners, etc.)
        is built with Tailwind CSS utility classes. This loads Tailwind
        directly in the browser and generates the matching styles on
-       the fly — no separate build step needed. -->
-  <script src="https://cdn.tailwindcss.com"></script>
+       the fly — no separate build step needed.
+       Self-hosted (public/js/tailwind.js) instead of cdn.tailwindcss.com:
+       on some phones the outside CDN was blocked or dropped (content
+       blockers / carrier filtering), which silently removed every layout
+       utility and collapsed the whole mobile layout into a jumbled
+       single column. Served from our own site it can't be blocked. -->
+  <script src="/js/tailwind.js"></script>
   <link rel="stylesheet" href="/styles.css" />
 </head>
 <body>
