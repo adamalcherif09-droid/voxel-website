@@ -362,6 +362,38 @@ button:active {
   to   { transform: translateY(0) scaleX(1); }
 }
 
+/* Device-tilt (gyroscope) cards — mobile equivalent of the desktop
+   cursor tilt. --gyro-x/--gyro-y are updated once per frame by
+   motion.js and drive every card at once. */
+.voxel-gyro-active .voxel-tilt,
+.voxel-gyro-active .cat-tile-accent {
+  transform: perspective(600px) rotateX(var(--gyro-x, 0deg)) rotateY(var(--gyro-y, 0deg));
+  transition: transform 0.05s linear;
+}
+
+.voxel-tilt-permission {
+  position: fixed;
+  left: 50%;
+  bottom: 20px;
+  transform: translateX(-50%);
+  z-index: 80;
+  padding: 10px 16px;
+  border-radius: 999px;
+  border: 0;
+  cursor: pointer;
+  font-size: 13px;
+  font-family: 'Inter', sans-serif;
+  font-weight: 500;
+  color: #161618;
+  background: rgba(230, 219, 211, 0.95);
+  box-shadow: 0 8px 20px rgba(22,22,24,0.18), inset 0 1px 0 rgba(255,255,255,0.5);
+  animation: voxelPermissionIn 0.4s cubic-bezier(.2,.85,.35,1.25) both;
+}
+@keyframes voxelPermissionIn {
+  from { opacity: 0; transform: translateX(-50%) translateY(20px); }
+  to { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .voxel-reveal, .voxel-fade { animation: none !important; clip-path: none !important; opacity: 1 !important; transform: none !important; }
   .voxel-mark-bar { transition: none !important; }
@@ -382,6 +414,8 @@ button:active {
   .voxel-modal-overlay, .voxel-modal-overlay > div { animation: none !important; }
   .voxel-page-fade, .voxel-page-push, .voxel-page-pop { animation: none !important; opacity: 1 !important; transform: none !important; }
   .voxel-success-flash { animation: none !important; }
+  .voxel-gyro-active .voxel-tilt, .voxel-gyro-active .cat-tile-accent { transform: none !important; transition: none !important; }
+  .voxel-tilt-permission { animation: none !important; }
 
   .voxel-mark-bar { animation: none !important; transform: none !important; }
   .liquid-glass, .glass-accent { transition: none !important; }
