@@ -40,8 +40,12 @@ function AdminGate(props) {
     sha256(pw).then(function (hash) {
       setChecking(false);
       if (hash === sec.passcodeHash) {
+        var entered = pw;
         setPw("");
-        props.onSuccess();
+        // Ask the server for a short-lived admin session token so
+        // dashboard saves are authorized. The dashboard still opens
+        // even if this fails — saves would just warn until it works.
+        apiAuth(entered).then(function () { props.onSuccess(); });
         return;
       }
       var nextAttempts = attempts + 1;
@@ -365,9 +369,16 @@ function AdminCatalog(props) {
     setImporting(true);
     var validCategoryIds = {};
     categories.forEach(function (c) { validCategoryIds[c.id] = true; });
+    // Skip anything whose id is already in the catalog (re-pasting the
+    // same collected batch) or appears twice inside one paste — both
+    // used to create confusing duplicate models.
+    var existingIds = {};
+    models.forEach(function (m) { existingIds[m.id] = true; });
+    var batchIds = {};
     var toAdd = [];
     var skippedErrors = 0;
     var skippedNoCategory = 0;
+    var skippedDuplicates = 0;
 
     var entries = parsed.slice();
     function processNext() {
@@ -381,6 +392,12 @@ function AdminCatalog(props) {
         processNext();
         return;
       }
+      if (entry.id && (existingIds[entry.id] || batchIds[entry.id])) {
+        skippedDuplicates += 1;
+        processNext();
+        return;
+      }
+      if (entry.id) batchIds[entry.id] = true;
       var categoryId = entry.categoryId;
       if (!validCategoryIds[categoryId]) {
         if (validCategoryIds[filterCat]) {
@@ -421,6 +438,7 @@ function AdminCatalog(props) {
         setImporting(false);
         setJsonText("");
         var parts = ["Imported " + toAdd.length + " model" + (toAdd.length === 1 ? "" : "s") + "."];
+        if (skippedDuplicates > 0) parts.push(skippedDuplicates + " skipped (already in your catalog).");
         if (skippedErrors > 0) parts.push(skippedErrors + " skipped (fetch errors or missing name).");
         if (skippedNoCategory > 0) parts.push(skippedNoCategory + " skipped (unrecognized category).");
         setImportSummary(parts.join(" "));
@@ -607,7 +625,7 @@ function AdminCatalog(props) {
                   <div className="text-sm" style={{ color: "var(--ink)" }}>{m.name}</div>
                   <div className="text-xs font-mono-ac" style={{ color: "var(--ink-dim)" }}>{m.price ? formatPriceDisplay(m.price, content) : "No price set"}</div>
                 </div>
-                <button onClick={function () { props.toggleFeatured(m.id); }} className="cursor-pointer border-0 bg-transparent" style={{ color: m.featured ? "var(--brass-text)" : "var(--ink-dim)" }}>
+                <button onClick={function () { props.toggleFeatured(m.id); }} className="voxel-star-btn cursor-pointer border-0 bg-transparent" style={{ color: m.featured ? "var(--brass-text)" : "var(--ink-dim)" }}>
                   <Star size={17} fill={m.featured ? "var(--brass-text)" : "none"} />
                 </button>
                 <button onClick={function () { setEditingModel(m); }} className="cursor-pointer border-0 bg-transparent" style={{ color: "var(--ink-dim)" }}><Pencil size={15} /></button>

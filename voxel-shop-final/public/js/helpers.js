@@ -52,6 +52,16 @@ var ALL_DESIGNS_CATEGORY_ID = "__all__";
 var ALL_DESIGNS_CATEGORY = { id: ALL_DESIGNS_CATEGORY_ID, name: "All Designs" };
 
 var ALLOWED_FILE_EXTENSIONS = [".stl", ".3mf", ".step", ".stp", ".obj"];
+
+// Product photos: 720px / q0.68 keeps cards and the detail popup sharp
+// while staying far smaller than the previous 800px / q0.72 — the whole
+// catalog lives inside one database document, so every kilobyte counts
+// on the free tier. Logos keep a larger PNG path (transparency + crisp
+// small-size detail matter more there than bytes).
+var PRODUCT_IMAGE_MAX_DIM = 720;
+var PRODUCT_IMAGE_JPEG_QUALITY = 0.68;
+var LOGO_IMAGE_MAX_DIM = 500;
+
 function isAllowedFile(name) {
   var lower = name.toLowerCase();
   return ALLOWED_FILE_EXTENSIONS.some(function (ext) { return lower.endsWith(ext); });
@@ -165,18 +175,90 @@ var DEFAULT_SETTINGS = {
    (server.js), which keeps everything in one shared place so
    every visitor sees the same catalog, prices, and settings,
    no matter which device or browser they're using.
+
+   Security model: reading is public (customers need the
+   catalog), but WRITES to the shop's data require an admin
+   session token — issued by the server only after a correct
+   passcode. The owner's dashboard gets one automatically when
+   they pass the footer gate; everyone else stays read-only.
 --------------------------------------------------------- */
-function storageGet(key) {
-  return fetch("/api/storage/" + encodeURIComponent(key))
-    .then(function (res) { return res.ok ? res.json() : { value: null }; })
-    .then(function (data) { return data.value ? JSON.parse(data.value) : null; })
-    .catch(function () { return null; });
+
+// Admin session token for this browser tab. sessionStorage (not
+// localStorage) on purpose: it dies with the tab, matching how
+// dashboard access already requires re-entering the gate each visit.
+var adminApiToken = "";
+try { adminApiToken = window.sessionStorage.getItem("voxel-admin-token") || ""; } catch (e) { adminApiToken = ""; }
+
+function setAdminApiToken(token) {
+  adminApiToken = token || "";
+  try {
+    if (adminApiToken) window.sessionStorage.setItem("voxel-admin-token", adminApiToken);
+    else window.sessionStorage.removeItem("voxel-admin-token");
+  } catch (e) { /* storage unavailable — token just lives in memory */ }
 }
-function storageSet(key, value) {
-  return fetch("/api/storage/" + encodeURIComponent(key), {
+function getAdminApiToken() { return adminApiToken; }
+
+// Exchanges the raw passcode for a short-lived server-side admin
+// session. Returns the token, or null if the server couldn't be
+// reached / rejected it — callers proceed gracefully either way.
+function apiAuth(password) {
+  return fetch("/api/auth", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ password: password }),
+  })
+    .then(function (res) { return res.ok ? res.json() : null; })
+    .then(function (json) {
+      if (json && json.token) { setAdminApiToken(json.token); return json.token; }
+      return null;
+    })
+    .catch(function () { return null; });
+}
+
+// Resolves to { ok: true, value: parsedValueOrNullOrCorruptFlaggedFalse }
+// — `ok:false` means we could NOT reliably read the key (network error,
+// server error, or corrupt payload). Callers must treat ok:false as
+// "unknown state", never as "empty" — that distinction is what stops a
+// transient outage from being able to wipe real data.
+function storageGet(key) {
+  return fetch("/api/storage/" + encodeURIComponent(key))
+    .then(function (res) {
+      if (!res.ok) return { ok: false, value: null };
+      return res.json().then(function (data) {
+        try {
+          return { ok: true, value: data && data.value ? JSON.parse(data.value) : null };
+        } catch (e) {
+          return { ok: false, value: null }; // corrupt payload — unknown state
+        }
+      });
+    })
+    .catch(function () { return { ok: false, value: null }; });
+}
+
+// Returns true when the server confirmed the write. `opts.admin` marks
+// owner-dashboard writes, which carry the session token and are
+// rejected by the server without one.
+function storageSet(key, value, opts) {
+  var headers = { "Content-Type": "application/json" };
+  var token = getAdminApiToken();
+  if (opts && opts.admin && token) headers["x-voxel-token"] = token;
+  return fetch("/api/storage/" + encodeURIComponent(key), {
+    method: "POST",
+    headers: headers,
     body: JSON.stringify({ value: JSON.stringify(value) }),
+  })
+    .then(function (res) { return res.ok; })
+    .catch(function () { return false; });
+}
+
+// Appends one inquiry through the public append-only endpoint. The
+// server caps and sanitizes the list, so customers never need (and
+// never receive) admin powers.
+function saveInquiryRemote(entry) {
+  return fetch("/api/inquiries", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ entry: entry }),
   })
     .then(function (res) { return res.ok; })
     .catch(function () { return false; });
@@ -198,7 +280,7 @@ function compressImage(file, options) {
     reader.onload = function (e) {
       var img = new window.Image();
       img.onload = function () {
-        var maxDim = preserveAlpha ? 500 : 800;
+        var maxDim = preserveAlpha ? LOGO_IMAGE_MAX_DIM : PRODUCT_IMAGE_MAX_DIM;
         var width = img.width;
         var height = img.height;
         if (width > height && width > maxDim) {
@@ -212,10 +294,16 @@ function compressImage(file, options) {
         canvas.width = width;
         canvas.height = height;
         var ctx = canvas.getContext("2d");
+        // JPEG has no alpha channel — exporting a transparent image to
+        // JPEG would fill the transparent areas with BLACK. Paint white
+        // underneath first so product photos on transparent backgrounds
+        // keep a clean look.
+        if (!preserveAlpha) {
+          ctx.fillStyle = "#ffffff";
+          ctx.fillRect(0, 0, width, height);
+        }
         ctx.drawImage(img, 0, 0, width, height);
-        // JPEG has no alpha channel — exporting a transparent image to JPEG
-        // fills the transparent areas with black. PNG keeps transparency intact.
-        resolve(preserveAlpha ? canvas.toDataURL("image/png") : canvas.toDataURL("image/jpeg", 0.72));
+        resolve(preserveAlpha ? canvas.toDataURL("image/png") : canvas.toDataURL("image/jpeg", PRODUCT_IMAGE_JPEG_QUALITY));
       };
       img.onerror = reject;
       img.src = e.target.result;
@@ -237,7 +325,7 @@ function compressDataUrl(dataUrl, options) {
     }
     var img = new window.Image();
     img.onload = function () {
-      var maxDim = preserveAlpha ? 500 : 800;
+      var maxDim = preserveAlpha ? LOGO_IMAGE_MAX_DIM : PRODUCT_IMAGE_MAX_DIM;
       var width = img.width;
       var height = img.height;
       if (width > height && width > maxDim) {
@@ -251,8 +339,12 @@ function compressDataUrl(dataUrl, options) {
       canvas.width = width;
       canvas.height = height;
       var ctx = canvas.getContext("2d");
+      if (!preserveAlpha) {
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0, 0, width, height);
+      }
       ctx.drawImage(img, 0, 0, width, height);
-      resolve(preserveAlpha ? canvas.toDataURL("image/png") : canvas.toDataURL("image/jpeg", 0.72));
+      resolve(preserveAlpha ? canvas.toDataURL("image/png") : canvas.toDataURL("image/jpeg", PRODUCT_IMAGE_JPEG_QUALITY));
     };
     img.onerror = function () { resolve(""); };
     img.src = dataUrl;

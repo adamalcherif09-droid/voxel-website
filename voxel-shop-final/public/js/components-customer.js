@@ -114,7 +114,8 @@ function HomeView(props) {
 
   return (
     <div className="max-w-6xl mx-auto px-5 sm:px-8">
-      <section className="pt-14 sm:pt-20 pb-10">
+      <section className="pt-14 sm:pt-20 pb-10 voxel-hero">
+        <div className="voxel-hero-fx" aria-hidden="true"></div>
         <Eyebrow>{content.businessName} — {content.heroEyebrow}</Eyebrow>
         <h1 className="voxel-reveal font-display font-medium leading-tight" style={{ color: "var(--ink)", fontSize: "clamp(2.2rem, 5vw, 3.4rem)" }}>
           {content.heroHeadlineLine1}<br />{content.heroHeadlineLine2}
@@ -148,7 +149,7 @@ function HomeView(props) {
           >
             <Layers size={20} style={{ color: "var(--brass-text)" }} />
             <div className="font-display text-lg mt-3" style={{ color: "var(--ink)" }}>All Designs</div>
-            <div className="text-xs mt-1 font-mono-ac" style={{ color: "var(--ink-dim)" }}>
+            <div className="text-xs mt-1 font-mono-ac" data-countup style={{ color: "var(--ink-dim)" }}>
               {models.length > 0 ? (models.length + " " + (models.length === 1 ? "design" : "designs")) : "Coming soon"}
             </div>
           </button>

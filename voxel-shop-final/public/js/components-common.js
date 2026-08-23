@@ -25,7 +25,7 @@ function ShapeIcon(props) {
 
 function Eyebrow(props) {
   return (
-    <div className="font-mono-ac text-xs tracking-widest uppercase mb-2" style={{ color: "var(--teal)" }}>
+    <div className="voxel-eyebrow font-mono-ac text-xs tracking-widest uppercase mb-2" style={{ color: "var(--teal)" }}>
       {props.children}
     </div>
   );

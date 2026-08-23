@@ -13,6 +13,7 @@ function App() {
   var _viewingModel = React.useState(null); var viewingModel = _viewingModel[0]; var setViewingModel = _viewingModel[1];
   var _isAdmin = React.useState(false); var isAdmin = _isAdmin[0]; var setIsAdmin = _isAdmin[1];
   var _adminTab = React.useState("orders"); var adminTab = _adminTab[0]; var setAdminTab = _adminTab[1];
+  var _loadError = React.useState(false); var loadError = _loadError[0]; var setLoadError = _loadError[1];
 
   React.useEffect(function () {
     Promise.all([
@@ -21,10 +22,24 @@ function App() {
       storageGet("voxel-settings"),
       storageGet("voxel-content"),
     ]).then(function (results) {
-      var savedCatalog = results[0];
-      var savedInquiries = results[1];
-      var savedSettings = results[2];
-      var savedContent = results[3];
+      var catalogResult = results[0];
+      var inquiriesResult = results[1];
+      var settingsResult = results[2];
+      var contentResult = results[3];
+
+      // A failed read means "unknown state", NOT "empty shop". Seeding
+      // defaults over a temporarily-unreadable database is exactly how
+      // a real catalog gets erased, so on any read failure we show a
+      // retry screen and touch nothing.
+      if (!catalogResult.ok || !inquiriesResult.ok || !settingsResult.ok || !contentResult.ok) {
+        setLoadError(true);
+        return;
+      }
+
+      var savedCatalog = catalogResult.value;
+      var savedInquiries = inquiriesResult.value;
+      var savedSettings = settingsResult.value;
+      var savedContent = contentResult.value;
 
       var catalogPromise;
       if (savedCatalog) {
@@ -53,6 +68,9 @@ function App() {
         var savedSecurity = Object.assign({}, savedSettings.security || {});
         // Migrate a pre-hash plaintext passcode (from before this update)
         // into a hash, rather than silently reverting to the default one.
+        // The write-back here is best-effort and intentionally unauthenticated:
+        // it may be rejected for an existing doc (fine — the migrated hash
+        // lives in state and gets persisted on the owner's next real save).
         var migrationStep = Promise.resolve();
         if (!savedSecurity.passcodeHash && savedSecurity.passcode) {
           migrationStep = sha256(savedSecurity.passcode).then(function (hash) {
@@ -83,6 +101,16 @@ function App() {
     });
   }, []);
 
+  // Owner-dashboard saves are loud: if the server doesn't confirm the
+  // write, say so immediately instead of letting changes silently
+  // vanish on the next refresh.
+  function guardedSave(key, value) {
+    return storageSet(key, value, { admin: true }).then(function (ok) {
+      if (!ok) alert("Saving failed — your change was NOT saved.\n\nCheck your internet connection and try again. If you were logged out of the dashboard, redo the footer entry and apply the change again.");
+      return ok;
+    });
+  }
+
   function persistCatalog(updater) {
     var resolved;
     setCatalog(function (prev) {
@@ -91,14 +119,7 @@ function App() {
     });
     // setCatalog's updater above runs synchronously in React's batching,
     // so `resolved` is already set by the time we get here.
-    return storageSet("voxel-catalog", resolved);
-  }
-  function persistInquiries(updater) {
-    return storageGet("voxel-inquiries").then(function (latest) {
-      var next = typeof updater === "function" ? updater(latest || []) : updater;
-      setInquiries(next);
-      return storageSet("voxel-inquiries", next).then(function () { return next; });
-    });
+    return guardedSave("voxel-catalog", resolved);
   }
   function persistSettings(updaterOrValue) {
     var resolved;
@@ -106,11 +127,11 @@ function App() {
       resolved = typeof updaterOrValue === "function" ? updaterOrValue(prev) : updaterOrValue;
       return resolved;
     });
-    return storageSet("voxel-settings", resolved);
+    return guardedSave("voxel-settings", resolved);
   }
   function persistContent(next) {
     setContent(next);
-    return storageSet("voxel-content", next);
+    return guardedSave("voxel-content", next);
   }
 
   function goHome() { setView("home"); setActiveCategory(null); }
@@ -137,9 +158,18 @@ function App() {
       channel: channel,
       createdAt: Date.now(),
     };
-    persistInquiries(function (latest) { return [entry].concat(latest); }).then(function () {
-      pingDiscord(settings.webhookUrl, "New inquiry via " + channel + ": " + entry.label + (entry.note ? " — " + entry.note : ""));
+    // Append through the public endpoint (server caps the list). If the
+    // current list can't be read reliably, skip saving rather than risk
+    // overwriting history — the Discord ping below still fires.
+    storageGet("voxel-inquiries").then(function (result) {
+      if (!result.ok) return;
+      var latest = result.value || [];
+      var known = latest.some(function (i) { return i && i.id === entry.id; });
+      if (known) return;
+      setInquiries([entry].concat(latest));
+      saveInquiryRemote(entry);
     });
+    pingDiscord(settings.webhookUrl, "New inquiry via " + channel + ": " + entry.label + (entry.note ? " — " + entry.note : ""));
   }
 
   function addCategory(name) {
@@ -186,6 +216,23 @@ function App() {
   function handleGateSuccess() {
     setIsAdmin(true);
     setView("admin");
+  }
+
+  if (loadError) {
+    return (
+      <div className="voxel-root">
+        <div className="max-w-md mx-auto px-6 py-24 text-center">
+          <div className="font-display text-xl" style={{ color: "var(--ink)" }}>Can't reach the shop right now</div>
+          <p className="text-sm mt-3" style={{ color: "var(--ink-dim)" }}>
+            The shop's data couldn't be loaded, so nothing is being shown rather than risk displaying — or overwriting —
+            the real catalog. This is usually a temporary connection problem.
+          </p>
+          <div className="mt-6">
+            <PrimaryButton onClick={function () { window.location.reload(); }}>Try again</PrimaryButton>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   if (loading) {

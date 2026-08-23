@@ -1,6 +1,15 @@
 (function () {
   "use strict";
 
+  /* One-time branded intro (markup in index.html): the CSS fades and
+     hides it on its own schedule; this just removes the dead node a
+     beat later. Runs for everyone, including reduced-motion users
+     (whose CSS hides the overlay instantly). */
+  setTimeout(function () {
+    var intro = document.getElementById("voxel-intro");
+    if (intro && intro.parentNode) intro.parentNode.removeChild(intro);
+  }, 2600);
+
   var reduced = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   if (reduced) return;
 
@@ -254,8 +263,8 @@
     var btn = document.createElement("button");
     btn.type = "button";
     btn.className = "voxel-tilt-permission";
-    btn.textContent = "✨ Enable tilt effect";
-    var autoHide = setTimeout(function () { btn.remove(); }, 8000);
+    btn.textContent = "Enable tilt effect";
+    var autoHide = setTimeout(function () { btn.remove(); }, 12000);
     btn.addEventListener("click", function () {
       clearTimeout(autoHide);
       DeviceOrientationEvent.requestPermission().then(function (state) {
@@ -293,25 +302,41 @@
     h1.classList.add("voxel-parallax");
     if (h1.dataset.voxelSplit) return;
     h1.dataset.voxelSplit = "1";
-    var text = h1.textContent;
-    var parts = text.split(/(\s+)/);
+    // Walk the heading's ORIGINAL children so an explicit <br> between
+    // headline lines survives the split (using textContent alone merged
+    // both of the owner's headline fields into one continuous line).
+    var segments = [{ text: "" }];
+    Array.prototype.forEach.call(h1.childNodes, function (n) {
+      if (n.nodeType === 3) {
+        segments[segments.length - 1].text += n.textContent;
+      } else if (n.tagName === "BR") {
+        segments.push({ text: "" });
+      } else if (n.textContent) {
+        segments[segments.length - 1].text += n.textContent;
+      }
+    });
+    while (segments.length > 1 && segments[segments.length - 1].text.trim() === "") segments.pop();
     h1.innerHTML = "";
     var delay = 0;
-    parts.forEach(function (part) {
-      if (!part) return;
-      if (/^\s+$/.test(part)) {
-        h1.appendChild(document.createTextNode(part));
-        return;
-      }
-      var outer = document.createElement("span");
-      outer.className = "voxel-word";
-      var inner = document.createElement("span");
-      inner.className = "voxel-word-inner";
-      inner.textContent = part;
-      inner.style.animationDelay = delay.toFixed(2) + "s";
-      delay += 0.05;
-      outer.appendChild(inner);
-      h1.appendChild(outer);
+    segments.forEach(function (seg, si) {
+      if (si > 0) h1.appendChild(document.createElement("br"));
+      var parts = seg.text.split(/(\s+)/);
+      parts.forEach(function (part) {
+        if (!part) return;
+        if (/^\s+$/.test(part)) {
+          h1.appendChild(document.createTextNode(part));
+          return;
+        }
+        var outer = document.createElement("span");
+        outer.className = "voxel-word";
+        var inner = document.createElement("span");
+        inner.className = "voxel-word-inner";
+        inner.textContent = part;
+        inner.style.animationDelay = delay.toFixed(2) + "s";
+        delay += 0.05;
+        outer.appendChild(inner);
+        h1.appendChild(outer);
+      });
     });
   }
 
@@ -402,14 +427,300 @@
     var copyMo = new MutationObserver(function (mutations) {
       mutations.forEach(function (m) {
         var el = m.target.nodeType === 3 ? m.target.parentElement : m.target;
-        if (el && el.tagName === "BUTTON" && /copied/i.test(el.textContent || "")) {
-          el.classList.remove("voxel-success-flash");
-          void el.offsetWidth;
-          el.classList.add("voxel-success-flash");
+        if (el && el.tagName === "BUTTON") {
+          var copied = /copied/i.test(el.textContent || "");
+          if (copied) {
+            el.classList.remove("voxel-success-flash");
+            void el.offsetWidth;
+            el.classList.add("voxel-success-flash");
+            // Draw-on checkmark rides along with the flash; removed
+            // again the moment the label resets to its normal text.
+            if (!el.querySelector(".voxel-check")) {
+              var check = document.createElement("span");
+              check.className = "voxel-check";
+              check.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 13l4 4L19 7"/></svg>';
+              el.appendChild(check);
+            }
+          } else {
+            var old = el.querySelector(".voxel-check");
+            if (old && old.parentNode === el) el.removeChild(old);
+          }
         }
       });
     });
     copyMo.observe(root, { childList: true, subtree: true, characterData: true });
+  }
+
+  /* =========================================================
+     STAGE 3 — MOTION GRAPHICS
+     Shared rules: transform/opacity only, everything pauses when
+     offscreen or the tab is hidden, and reduced-motion users never
+     reach any of this code (early return at the top).
+     ========================================================= */
+
+  /* --- Floating voxel field behind the hero ---
+     Deliberately NOT random: voxels sit in an orderly lattice and
+     breathe bottom-to-top in a fixed sequence, echoing how a 3D print
+     builds layer by layer. Every position, size, and timing is derived
+     from simple index math, so the composition is identical on every
+     visit — calm, rhythmic, and clearly designed. Pauses whenever the
+     hero scrolls away or the tab hides. */
+  function hexToRgbTriplet(hex) {
+    var m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec((hex || "").trim());
+    return m ? parseInt(m[1], 16) + "," + parseInt(m[2], 16) + "," + parseInt(m[3], 16) : "181,135,99";
+  }
+
+  function scanHeroParticles(root) {
+    root.querySelectorAll(".voxel-hero-fx").forEach(function (host) {
+      if (host.dataset.voxelfxInit) return;
+      host.dataset.voxelfxInit = "1";
+      if (navigator.deviceMemory && navigator.deviceMemory < 4) return; // low-end device: keep it calm
+
+      var canvas = document.createElement("canvas");
+      host.appendChild(canvas);
+      var ctx = canvas.getContext("2d");
+      if (!ctx) return;
+
+      var hostStyle = window.getComputedStyle(host);
+      var brassRGB = hexToRgbTriplet(hostStyle.getPropertyValue("--brass"));
+      var tealRGB = hexToRgbTriplet(hostStyle.getPropertyValue("--teal") || "#0f212b");
+      var dpr = Math.min(window.devicePixelRatio || 1, 1.5);
+      var W = 0, H = 0, voxels = [];
+      var running = false, visible = true, inView = false, rafId = 0, lastT = 0;
+
+      function resize() {
+        var rect = host.getBoundingClientRect();
+        W = Math.max(1, Math.round(rect.width));
+        H = Math.max(1, Math.round(rect.height));
+        canvas.width = Math.round(W * dpr);
+        canvas.height = Math.round(H * dpr);
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        seed();
+      }
+      // Lattice layout: roomy fixed cells, capped total. Row-major
+      // ordering means the breathing wave always travels bottom-to-top
+      // (rows counted from the bottom), exactly like deposited layers.
+      function seed() {
+        voxels = [];
+        var cellW = 78, cellH = 92;
+        var cols = Math.max(3, Math.floor(W / cellW));
+        var rows = Math.max(2, Math.floor(H / cellH));
+        while (cols * rows > 26 && cellW < 220) { cellW *= 1.18; cellH *= 1.18; cols = Math.max(3, Math.floor(W / cellW)); rows = Math.max(2, Math.floor(H / cellH)); }
+        var size = 5;
+        for (var r = 0; r < rows; r++) {
+          for (var c = 0; c < cols; c++) {
+            var x = ((c + 0.5) / cols) * W;
+            var y = H - ((r + 0.5) / rows) * H; // row 0 sits at the bottom = print bed
+            voxels.push({
+              x: Math.round(x - size / 2),
+              y: Math.round(y - size / 2),
+              s: size,
+              offset: r * 520 + c * 140,           // ms — fixed wave order, no jitter
+              period: 7200,                        // ms — one full breath
+              teal: (r * cols + c) % 9 === 4,      // a fixed, symmetric accent pattern
+            });
+          }
+        }
+      }
+      function frame(t) {
+        if (!running) return;
+        // Home view unmounted — stop the loop and detach every listener
+        // so navigating away leaves nothing running or leaking behind.
+        if (!document.body.contains(canvas)) { teardown(); return; }
+        var dt = Math.min(48, (t - lastT) || 16);
+        lastT = t;
+        ctx.clearRect(0, 0, W, H);
+        for (var i = 0; i < voxels.length; i++) {
+          var v = voxels[i];
+          var k = (((t + v.offset) % v.period) + v.period) % v.period / v.period; // 0..1 life position
+          var bell = Math.sin(Math.PI * k);      // smooth 0 -> 1 -> 0
+          var alpha = 0.15 * bell * bell;        // ease toward the edges of the breath
+          if (alpha < 0.008) continue;
+          var lift = -7 * bell;                  // rises slightly mid-breath, settles back
+          ctx.globalAlpha = alpha;
+          ctx.fillStyle = "rgb(" + (v.teal ? tealRGB : brassRGB) + ")";
+          ctx.fillRect(v.x, Math.round(v.y + lift), v.s, v.s);
+        }
+        ctx.globalAlpha = 1;
+        rafId = requestAnimationFrame(frame);
+      }
+      function setRunning(on) {
+        if (on && !running) { running = true; lastT = 0; rafId = requestAnimationFrame(frame); }
+        else if (!on && running) { running = false; cancelAnimationFrame(rafId); }
+      }
+      function update() { setRunning(visible && inView); }
+      function teardown() {
+        setRunning(false);
+        if (resizeObserver) resizeObserver.disconnect();
+        if (viewObserver) viewObserver.disconnect();
+        document.removeEventListener("visibilitychange", onVisibility);
+      }
+      function onVisibility() { visible = !document.hidden; update(); }
+
+      var resizeObserver = null;
+      if (typeof ResizeObserver !== "undefined") { resizeObserver = new ResizeObserver(resize); resizeObserver.observe(host); }
+      else window.addEventListener("resize", resize);
+      var viewObserver = null;
+      if (typeof IntersectionObserver !== "undefined") {
+        viewObserver = new IntersectionObserver(function (entries) {
+          inView = entries[0].isIntersecting;
+          update();
+        }, { threshold: 0 });
+        viewObserver.observe(host);
+      } else { inView = true; }
+      document.addEventListener("visibilitychange", onVisibility);
+
+      resize();
+      update();
+    });
+  }
+
+  /* --- Eyebrow underline draw-on-scroll --- */
+  var eyebrowObserver = ("IntersectionObserver" in window) ? new IntersectionObserver(function (entries) {
+    entries.forEach(function (entry) {
+      if (entry.isIntersecting) {
+        entry.target.classList.add("voxel-drawn");
+        eyebrowObserver.unobserve(entry.target);
+      }
+    });
+  }, { threshold: 0.3 }) : null;
+
+  function scanEyebrows(root) {
+    if (!eyebrowObserver) return;
+    root.querySelectorAll(".voxel-eyebrow").forEach(function (el) {
+      if (el.dataset.voxelEyebrow) return;
+      el.dataset.voxelEyebrow = "1";
+      eyebrowObserver.observe(el);
+    });
+  }
+
+  /* --- Count-up on the All Designs tile --- */
+  var countupObserver = ("IntersectionObserver" in window) ? new IntersectionObserver(function (entries) {
+    entries.forEach(function (entry) {
+      if (!entry.isIntersecting) return;
+      countupObserver.unobserve(entry.target);
+      var el = entry.target;
+      if (el.dataset.voxelCounted) return;
+      el.dataset.voxelCounted = "1";
+      var text = el.textContent || "";
+      var match = text.match(/\d+/);
+      if (!match) return;
+      var final = parseInt(match[0], 10);
+      if (final <= 0 || final > 999) return;
+      var startTs = null, DURATION = 800;
+      function step(ts) {
+        if (startTs === null) startTs = ts;
+        var k = Math.min(1, (ts - startTs) / DURATION);
+        var eased = 1 - Math.pow(1 - k, 3);
+        el.textContent = text.replace(/\d+/, String(Math.round(final * eased)));
+        if (k < 1) requestAnimationFrame(step);
+      }
+      requestAnimationFrame(step);
+    });
+  }, { threshold: 0.6 }) : null;
+
+  function scanCountups(root) {
+    if (!countupObserver) return;
+    root.querySelectorAll("[data-countup]").forEach(function (el) {
+      if (el.dataset.voxelCountupInit) return;
+      el.dataset.voxelCountupInit = "1";
+      countupObserver.observe(el);
+    });
+  }
+
+  /* --- Scroll-driven print film ---
+     A fixed, translucent Bambu Lab printer time-lapse behind all
+     content (genuine in-chamber firmware footage — source: Borillion,
+     bambu-timelapse-dataset, CC BY 4.0; credit also lives in the repo
+     README). The playhead is scrubbed from scroll position (smoothed
+     with a small lerp), so the print visibly continues as the visitor
+     moves down the page. The layer is injected into .voxel-root once
+     React has rendered it; a failed video simply removes itself.
+     Reduced-motion users never reach this code, and CSS hides the
+     layer regardless. */
+  function scanScrollFilm(node) {
+    node.querySelectorAll(".voxel-root").forEach(function (rootEl) {
+      if (rootEl.dataset.voxelfilmInit) return;
+      rootEl.dataset.voxelfilmInit = "1";
+
+      var wrap = document.createElement("div");
+      wrap.className = "voxel-scrollfilm";
+      wrap.setAttribute("aria-hidden", "true");
+      var video = document.createElement("video");
+      video.muted = true;
+      video.defaultMuted = true;
+      video.playsInline = true;
+      video.setAttribute("muted", "");
+      video.setAttribute("playsinline", "");
+      video.preload = "auto";
+      video.src = "/media/x1c-print.mp4";
+      wrap.appendChild(video);
+      rootEl.insertBefore(wrap, rootEl.firstChild);
+
+      var duration = 0, current = 0, rafId = 0;
+
+      function pageProgress() {
+        var max = document.documentElement.scrollHeight - window.innerHeight;
+        return max > 0 ? Math.min(1, Math.max(0, window.scrollY / max)) : 0;
+      }
+      function tick() {
+        rafId = 0;
+        if (!duration) return;
+        var want = pageProgress() * duration;
+        current += (want - current) * 0.22; // buttery catch-up toward the scroll target
+        if (Math.abs(want - current) < 0.03) current = want;
+        try { video.currentTime = current; } catch (e) {}
+        if (Math.abs(want - current) >= 0.03) rafId = requestAnimationFrame(tick);
+      }
+      function scheduleTick() {
+        if (!rafId && duration) rafId = requestAnimationFrame(tick);
+      }
+      window.addEventListener("scroll", scheduleTick, { passive: true });
+      window.addEventListener("resize", scheduleTick, { passive: true });
+      video.addEventListener("loadedmetadata", function () {
+        duration = video.duration || 0;
+        scheduleTick();
+      });
+      video.addEventListener("error", function () {
+        if (wrap.parentNode) wrap.parentNode.removeChild(wrap); // no file — silently no film
+      });
+    });
+  }
+
+  function scanMotionGraphics(node) {
+    scanHeroParticles(node);
+    scanEyebrows(node);
+    scanCountups(node);
+    scanScrollFilm(node);
+  }
+
+  /* --- Tap bloom on glass buttons ---
+     Delegated pointerdown: anchors the bloom at the exact tap point
+     (same --mx/--my variables the hover specular uses) and replays a
+     one-shot animation. Class re-trigger trick keeps rapid taps lively. */
+  function initTapBloom() {
+    document.addEventListener("pointerdown", function (e) {
+      var el = e.target.closest && e.target.closest(".liquid-glass, .glass-accent");
+      if (!el || el.disabled) return;
+      var rect = el.getBoundingClientRect();
+      if (rect.width === 0 || rect.height === 0) return;
+      el.style.setProperty("--mx", (((e.clientX - rect.left) / rect.width) * 100) + "%");
+      el.style.setProperty("--my", (((e.clientY - rect.top) / rect.height) * 100) + "%");
+      el.classList.remove("voxel-tap");
+      void el.offsetWidth;
+      el.classList.add("voxel-tap");
+    }, { passive: true });
+  }
+
+  /* --- Featured-star pop (owner dashboard) --- */
+  function initStarPop() {
+    document.addEventListener("click", function (e) {
+      var btn = e.target.closest && e.target.closest(".voxel-star-btn");
+      if (!btn) return;
+      btn.classList.remove("voxel-pop");
+      void btn.offsetWidth;
+      btn.classList.add("voxel-pop");
+    });
   }
 
   function isModalOverlay(node) {
@@ -427,6 +738,7 @@
     scanForReveals(root);
     initImageBlurUp(root);
     splitHeroWords(root.querySelector("h1.voxel-reveal"));
+    scanMotionGraphics(root);
 
     var mo = new MutationObserver(function (mutations) {
       mutations.forEach(function (m) {
@@ -448,6 +760,7 @@
           scanForReveals(node);
           initImageBlurUp(node);
           initMagneticButtons();
+          scanMotionGraphics(node);
           if (retagGyroTargets) retagGyroTargets();
 
           if (node.parentElement && node.parentElement.tagName === "MAIN") {
@@ -470,6 +783,8 @@
     initTiltCards();
     initDeviceTilt();
     initHeroParallax();
+    initTapBloom();
+    initStarPop();
     initRootWatcher();
     initMagneticButtons();
     var root = document.getElementById("root");
