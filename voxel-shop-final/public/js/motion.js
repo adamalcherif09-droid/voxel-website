@@ -759,11 +759,51 @@
     });
   }
 
+  /* --- Adaptive hero text color ---
+     The film behind the hero swings between a dark print chamber and a
+     bright white print, so one fixed ink color always ends up invisible
+     part of the time. Every 300ms the region of the video frame behind
+     the hero is sampled, its average brightness measured, and the text
+     flips between black and warm white (smooth CSS transition) — the
+     text color literally adapts to the background. Stops itself when
+     the home view unmounts. */
+  function scanHeroContrast(root) {
+    collect(root, ".voxel-hero").forEach(function (hero) {
+      if (hero.dataset.voxelContrast) return;
+      hero.dataset.voxelContrast = "1";
+      var video = document.querySelector(".voxel-scrollfilm video");
+      if (!video) return; // no film (reduced motion / load failure) — static ink is fine
+      var sample = document.createElement("canvas");
+      sample.width = 32;
+      sample.height = 18;
+      var sctx = null;
+      try { sctx = sample.getContext("2d", { willReadFrequently: true }); } catch (e) { sctx = null; }
+      if (!sctx) return;
+      var timer = setInterval(function () {
+        if (!document.body.contains(hero)) { clearInterval(timer); return; }
+        if (document.hidden) return;
+        if (!video.videoWidth) return; // not buffered yet
+        try {
+          // Top half of the frame = the zone the hero text lives in.
+          sctx.drawImage(video, 0, 0, 32, 18);
+          var data = sctx.getImageData(0, 0, 32, 9).data;
+          var sum = 0, n = 0;
+          for (var i = 0; i < data.length; i += 4) {
+            sum += 0.2126 * data[i] + 0.7152 * data[i + 1] + 0.0722 * data[i + 2];
+            n++;
+          }
+          hero.classList.toggle("voxel-hero-dark", sum / n < 110);
+        } catch (e) { /* frame not ready — retried next tick */ }
+      }, 300);
+    });
+  }
+
   function scanMotionGraphics(node) {
     scanHeroParticles(node);
     scanEyebrows(node);
     scanCountups(node);
     scanScrollFilm(node);
+    scanHeroContrast(node);
     // Every view change is another chance to offer the iOS tilt
     // permission pill, until it's used or dismissed for the session.
     if (retagTiltPill) retagTiltPill();

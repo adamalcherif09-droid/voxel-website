@@ -672,12 +672,20 @@ footer.liquid-glass {
   );
   pointer-events: none;
 }
-/* Hero text: plain black, no glow — maximum contrast over the film. */
+/* Hero text: black over light backgrounds, warm white over dark ones —
+   motion.js samples the film behind the hero and toggles
+   .voxel-hero-dark, so the color always adapts to the background. */
 .voxel-hero .voxel-eyebrow,
 .voxel-hero h1,
 .voxel-hero .voxel-fade {
   color: #000 !important;
   text-shadow: none !important;
+  transition: color 0.45s ease;
+}
+.voxel-hero.voxel-hero-dark .voxel-eyebrow,
+.voxel-hero.voxel-hero-dark h1,
+.voxel-hero.voxel-hero-dark .voxel-fade {
+  color: #f7f1ea !important;
 }
 
 /* Small text bumped a touch for readability (12px -> ~13px, 14px -> ~15px).
