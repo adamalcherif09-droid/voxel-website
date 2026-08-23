@@ -271,6 +271,14 @@
     try { tiltPref = window.sessionStorage.getItem("voxel-tilt") || ""; } catch (e) { tiltPref = ""; }
 
     retagTiltPill = function () {
+      // Home page only: the pill belongs to the shop's front door, not
+      // to category/admin views. Leaving home dismisses it; coming
+      // back offers it again (until enabled or denied for the session).
+      if (!document.querySelector(".cat-shelf")) {
+        var stale = document.querySelector(".voxel-tilt-permission");
+        if (stale) { clearTimeout(autoHide); stale.remove(); }
+        return;
+      }
       if (tiltPref) return;
       if (document.querySelector(".voxel-tilt-permission")) return;
       var btn = document.createElement("button");
@@ -278,7 +286,7 @@
       btn.className = "voxel-tilt-permission";
       btn.setAttribute("aria-label", "Enable tilt effect");
       btn.textContent = "Enable tilt effect";
-      var autoHide = setTimeout(function () { btn.remove(); }, 12000);
+      autoHide = setTimeout(function () { btn.remove(); }, 12000);
       btn.addEventListener("click", function () {
         clearTimeout(autoHide);
         DeviceOrientationEvent.requestPermission().then(function (state) {
