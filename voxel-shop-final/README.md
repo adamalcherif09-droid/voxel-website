@@ -1,153 +1,16 @@
-# Voxel
+# VOXEL — Custom 3D Printing
 
-A 3D print shop website with a built-in owner dashboard.
+Shop site: catalog of ready-to-print designs + custom print orders, with an owner dashboard (footer entry → shape combination → passcode).
 
-## Where the data is stored — and why it matters where you host this
+## Stack
 
-This site needs somewhere to permanently store the catalog, settings,
-and inquiries so every visitor sees the same thing. It checks for a
-place to store that data in this order:
+- Plain HTML/CSS/JS — React loaded from CDN, JSX transformed in-browser (no build step)
+- Express backend (`server.js`), data in MongoDB Atlas (`MONGODB_URI`)
+- Tailwind utilities pre-built into `public/tailwind.css` (regenerate via `tailwind.config.js` if classes change)
+- Deploys on Render (auto-deploys from this repo)
 
-1. **`MONGODB_URI` set** → uses MongoDB Atlas's free-forever database
-   (see below). Use this when hosting anywhere that ISN'T Replit —
-   Render, for example — since those hosts don't keep a persistent
-   disk on their free plans, but this database does, independently.
-2. **`REPLIT_DB_URL` set** → uses Replit's own built-in database.
-   Replit sets this automatically, so nothing to configure.
-3. **Neither** → falls back to a local file (`data/store.json`), only
-   so the site still works for testing on your own computer. On a
-   host with no persistent disk, this option means your data can be
-   wiped on every restart — don't rely on it for a real launch.
+## Media credits
 
-## Option A: Running this on Replit (data stored on Replit)
-
-1. Import this whole folder into a new Replit project (Node.js template).
-2. Click the **Run** button. That's it — Replit will install what it
-   needs automatically the first time.
-3. Replit will give you a web address for your site. That's the link
-   to share with customers.
-
-## Option B: Running this on Render, free, with MongoDB Atlas for storage
-
-1. Push this project to a GitHub repo, then create a free Web Service
-   on Render pointing at it (Build Command: `npm install`, Start
-   Command: `node server.js`).
-2. Separately, make a free account at cloud.mongodb.com, create a
-   free "M0" cluster, create a database user, and get its connection
-   string (looks like `mongodb+srv://user:password@cluster0...`).
-3. In Render, go to your service → **Environment** → add an
-   environment variable named `MONGODB_URI` with that connection
-   string as the value. Redeploy.
-4. Your catalog, settings, and inquiries now live in MongoDB Atlas —
-   free, and they survive Render's free tier spinning down.
-
-## Making changes later — two very different kinds
-
-**Changes to your catalog, prices, photos, text on the page, contact
-info, colors of nothing — anything you can already do from the owner
-dashboard:** just do it there, on the live site. It saves straight to
-the database and shows up immediately for everyone. No file, no
-GitHub, no redeploying — this covers the vast majority of day-to-day
-changes (new models, new prices, editing the hero text, etc).
-
-**Changes to how the site actually works or looks structurally**
-(the kind that need editing the code itself — like this update did):
-1. Get the updated files (from me, or wherever you're making the edit).
-2. Go to your GitHub repo → open the file that changed → click the
-   pencil/edit icon (or use "Upload files" to overwrite it) → commit.
-3. Render watches that repo and redeploys automatically within a
-   minute or two of any commit — you don't need to touch Render at
-   all for this part. Just refresh the site once the deploy finishes.
-
-If you're ever unsure which kind of change something is, just ask —
-it's usually obvious ("change the price of this model" = dashboard;
-"change how the order button works" = code).
-
-## Bulk-importing designs from Thingiverse (optional)
-
-Dashboard → Catalog → "Search by keyword" lets you pull in many
-models at once by searching Thingiverse (e.g. "toys and fidgets"),
-sorted by popularity — instead of adding them one link at a time.
-Results are filtered to only ones whose license allows commercial
-use (selling prints), and each one gets the original designer
-credited automatically. This is separate from — and doesn't replace
-— the existing "Import from JSON" box for pasting in your own
-collected list; both work independently.
-
-To turn this on:
-1. Go to thingiverse.com/developers and create a free "app" — this
-   gives you an "App Token".
-2. In Render, go to your service → Environment → add a variable
-   named `THINGIVERSE_TOKEN` with that token as the value. Redeploy.
-
-Without this set, that search box will show a message telling you
-it's not connected yet — everything else on the site works fine
-either way.
-
-## Contact & social links in the footer
-
-Dashboard → Content → fill in any of: WhatsApp number, Instagram
-username, TikTok username, Facebook username/page, phone, email.
-Whichever ones you fill in show up as links in the site's footer.
-Tapping the phone number opens a WhatsApp chat (not a phone call) —
-that's on purpose, since that's how most customers actually want to
-reach out.
-
-## Built-in print pricing calculator
-
-Dashboard → Settings → "Print pricing calculator" sets your rates
-(electricity, PLA price per gram, machine wear, your own time).
-Everything is always priced as PLA — no other material option.
-
-Once set, Dashboard → Catalog → Add/edit a model has "Filament
-weight" and "Print time" fields — fill those in from your slicer and
-the price fills itself in automatically, still fully editable
-afterward. Pasting several models in at once (Bulk Import, or a
-Thingiverse search result) works the same way if the entry includes
-`grams`/`printHours`/`printMinutes` — a plain Thingiverse search
-result generally won't include these (Thingiverse's API doesn't
-provide slicer estimates), but your own bookmarklet-collected JSON
-can, if it's set up to grab that from the page.
-
-Changing your rates later only affects models you add from that
-point on — anything already in your catalog keeps its existing
-price untouched, exactly like the standalone calculator.
-
-## Getting into the owner dashboard
-
-Click your business name in the footer 5 times quickly, enter the
-shape combination, then the passcode. All three of those (how many
-clicks, the shapes, and the passcode) can be changed from inside the
-dashboard once you're in — Dashboard → Settings.
-
-## What's in each file
-
-- **server.js** — the small backend. Serves the website and stores
-  everything (catalog, settings, inquiries) in one shared place.
-- **package.json** — what this project needs installed (Express,
-  Replit's database tool, and the MongoDB driver).
-- **public/index.html** — the page that loads everything else.
-- **public/styles.css** — colors, fonts, spacing, layout.
-- **public/js/icons.js** — the small icons used throughout the site.
-- **public/js/helpers.js** — shared settings and small utility
-  functions (formatting prices, building WhatsApp links, etc).
-- **public/js/components-common.js** — small reusable pieces (buttons,
-  the loading screen).
-- **public/js/components-customer.js** — everything a customer sees:
-  the header, the shop pages, the "order now" popups.
-- **public/js/components-admin.js** — everything in your dashboard:
-  the login screen, catalog editor, content editor, settings.
-- **public/js/app.js** — ties everything together and starts the site.
-
-## Running it on your own computer (optional)
-
-If you ever want to test changes before they're live:
-
-```
-npm install
-npm start
-```
-
-Then open `http://localhost:3000`. With no `MONGODB_URI` or
-`REPLIT_DB_URL` set, it saves everything to a local file instead —
-that's just for testing.
+- `public/media/x1c-print.mp4` — Bambu Lab printer time-lapse by **Borillion**, from the
+  [bambu-timelapse-dataset](https://huggingface.co/datasets/v2thegreat/bambu-timelapse-dataset),
+  licensed **CC BY 4.0**. Recompressed for web.

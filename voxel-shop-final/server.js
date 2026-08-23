@@ -1,10 +1,45 @@
 const express = require("express");
 const path = require("path");
 const fs = require("fs");
+const crypto = require("crypto");
+const compression = require("compression");
 
 const app = express();
+// gzip shrinks API responses a lot — the catalog carries embedded
+// photos as base64 text, which compresses roughly 25-35% on the wire.
+app.use(compression());
 // Catalog entries include compressed photos as text, so allow a generous body size.
 app.use(express.json({ limit: "15mb" }));
+
+/* ---------------------------------------------------------
+   Who may write what:
+   - Reading is PUBLIC — customers need the catalog to shop.
+   - Writing "voxel-catalog" / "voxel-settings" / "voxel-content"
+     requires an admin session token, issued only by /api/auth
+     after a correct passcode (verified against the same hashed
+     passcode the dashboard gate checks). This is what stops a
+     random visitor from rewriting prices or content through the
+     raw API.
+   - The one exception is first-run bootstrap: a key that doesn't
+     exist yet may be created without a token, so a fresh deploy
+     still initializes itself.
+   - Inquiries get their own PUBLIC append-only endpoint — customers
+     must be able to log an order attempt without any password.
+--------------------------------------------------------- */
+const STORAGE_KEYS = ["voxel-catalog", "voxel-inquiries", "voxel-settings", "voxel-content"];
+const ADMIN_SESSION_TTL = 24 * 60 * 60 * 1000; // 24 hours
+const adminSessions = new Map(); // token -> expiresAt
+
+function isAuthedAdmin(req) {
+  const token = req.headers["x-voxel-token"];
+  if (!token || typeof token !== "string") return false;
+  const expiresAt = adminSessions.get(token);
+  if (!expiresAt || expiresAt < Date.now()) {
+    adminSessions.delete(token);
+    return false;
+  }
+  return true;
+}
 
 const DATA_DIR = path.join(__dirname, "data");
 const DATA_FILE = path.join(DATA_DIR, "store.json");
@@ -76,12 +111,16 @@ async function storageSet(key, value) {
 }
 
 /* ---------------------------------------------------------
-   API — the website's frontend calls these two endpoints
-   instead of saving things to the visitor's own browser, so
-   every visitor sees the exact same catalog and settings.
+   API — the website's frontend calls these endpoints instead
+   of saving things to the visitor's own browser, so every
+   visitor sees the exact same catalog and settings.
 --------------------------------------------------------- */
 app.get("/api/storage/:key", async (req, res) => {
   try {
+    if (!STORAGE_KEYS.includes(req.params.key)) {
+      res.status(404).json({ error: "unknown_key" });
+      return;
+    }
     const value = await storageGet(req.params.key);
     res.json({ value });
   } catch (e) {
@@ -92,16 +131,112 @@ app.get("/api/storage/:key", async (req, res) => {
 
 app.post("/api/storage/:key", async (req, res) => {
   try {
+    const key = req.params.key;
+    if (!STORAGE_KEYS.includes(key)) {
+      res.status(404).json({ error: "unknown_key" });
+      return;
+    }
     const value = req.body && typeof req.body.value === "string" ? req.body.value : null;
     if (value === null) {
       res.status(400).json({ error: "missing_value" });
       return;
     }
-    await storageSet(req.params.key, value);
+    if (!isAuthedAdmin(req)) {
+      if (key === "voxel-inquiries") {
+        // Customers append through /api/inquiries instead.
+        res.status(401).json({ error: "use_inquiries_endpoint" });
+        return;
+      }
+      const existing = await storageGet(key);
+      if (existing !== null) {
+        // Overwriting existing shop data without an admin session is
+        // exactly what this check exists to prevent. Creating a key
+        // that doesn't exist yet is allowed, so a fresh install can
+        // still bootstrap itself.
+        res.status(401).json({ error: "unauthorized_write" });
+        return;
+      }
+    }
+    await storageSet(key, value);
     res.json({ ok: true });
   } catch (e) {
     console.error("storage write failed:", e);
     res.status(500).json({ error: "storage_write_failed" });
+  }
+});
+
+/* ---------------------------------------------------------
+   Admin auth — trades the raw passcode for a short-lived
+   session token. The passcode itself is verified against the
+   same SHA-256 hash the dashboard stores, using a timing-safe
+   comparison; tokens live in memory only (a server restart
+   just means the owner re-enters through the footer gate,
+   which they already do per visit anyway).
+--------------------------------------------------------- */
+app.post("/api/auth", async (req, res) => {
+  try {
+    const password = req.body && typeof req.body.password === "string" ? req.body.password : "";
+    const raw = await storageGet("voxel-settings");
+    let stored = null;
+    if (raw) { try { stored = JSON.parse(raw); } catch (e) { stored = null; } }
+    let expectedHash = stored && stored.security ? stored.security.passcodeHash : null;
+    // Very old deployments stored the passcode as readable text; accept
+    // that shape too by hashing it here (the dashboard migrates it to a
+    // hash on its next authenticated save).
+    if (!expectedHash && stored && stored.security && typeof stored.security.passcode === "string") {
+      expectedHash = crypto.createHash("sha256").update(stored.security.passcode).digest("hex");
+    }
+    const candidate = crypto.createHash("sha256").update(password).digest("hex");
+    const matches =
+      typeof expectedHash === "string" &&
+      expectedHash.length === candidate.length &&
+      crypto.timingSafeEqual(Buffer.from(candidate), Buffer.from(expectedHash));
+    if (!matches) {
+      res.status(401).json({ error: "wrong_passcode" });
+      return;
+    }
+    const token = crypto.randomUUID();
+    adminSessions.set(token, Date.now() + ADMIN_SESSION_TTL);
+    setTimeout(() => adminSessions.delete(token), ADMIN_SESSION_TTL).unref();
+    res.json({ token: token });
+  } catch (e) {
+    console.error("auth failed:", e);
+    res.status(500).json({ error: "auth_failed" });
+  }
+});
+
+/* ---------------------------------------------------------
+   Public append-only inquiries — customers log an order attempt
+   here. The server owns the list: it sanitizes each entry and
+   caps it at the most recent 200 so it can never grow unbounded
+   on the free database tier.
+--------------------------------------------------------- */
+app.post("/api/inquiries", async (req, res) => {
+  try {
+    const entry = req.body && req.body.entry;
+    if (!entry || typeof entry !== "object" || !entry.id || typeof entry.label !== "string") {
+      res.status(400).json({ error: "invalid_entry" });
+      return;
+    }
+    const raw = await storageGet("voxel-inquiries");
+    let list = [];
+    if (raw) { try { list = JSON.parse(raw); } catch (e) { list = []; } }
+    if (!Array.isArray(list)) list = [];
+    list.unshift({
+      id: String(entry.id).slice(0, 60),
+      type: entry.type === "custom" ? "custom" : "catalog",
+      label: String(entry.label).slice(0, 200),
+      note: String(entry.note || "").slice(0, 1000),
+      fileName: String(entry.fileName || "").slice(0, 200),
+      channel: entry.channel === "instagram" ? "instagram" : "whatsapp",
+      createdAt: Number(entry.createdAt) || Date.now(),
+    });
+    if (list.length > 200) list = list.slice(0, 200);
+    await storageSet("voxel-inquiries", JSON.stringify(list));
+    res.json({ ok: true });
+  } catch (e) {
+    console.error("inquiry save failed:", e);
+    res.status(500).json({ error: "inquiry_save_failed" });
   }
 });
 
@@ -147,6 +282,26 @@ function pickThingUrl(d, id) {
   return d.public_url || d.thing_url || (id ? "https://www.thingiverse.com/thing:" + id : "");
 }
 
+// Runs fn over items with a small concurrency limit instead of one by
+// one — the old sequential loop could take a minute for 60 results and
+// increased the odds of tripping Thingiverse's rate limits.
+async function mapPool(items, limit, fn) {
+  let index = 0;
+  const out = new Array(items.length);
+  async function worker() {
+    while (index < items.length) {
+      const i = index++;
+      try {
+        out[i] = await fn(items[i]);
+      } catch (e) {
+        out[i] = { _skipReason: "error" };
+      }
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return out;
+}
+
 app.get("/api/thingiverse-search", async (req, res) => {
   try {
     const token = process.env.THINGIVERSE_TOKEN;
@@ -172,6 +327,9 @@ app.get("/api/thingiverse-search", async (req, res) => {
         + "&access_token=" + encodeURIComponent(token);
       const sr = await fetch(searchUrl);
       if (!sr.ok) {
+        if (sr.status === 429) {
+          throw new Error("Thingiverse's rate limit was hit — wait a few minutes and search again.");
+        }
         const body = await sr.text().catch(function () { return ""; });
         throw new Error("Thingiverse search failed (HTTP " + sr.status + "): " + body.slice(0, 300));
       }
@@ -186,11 +344,11 @@ app.get("/api/thingiverse-search", async (req, res) => {
     }
     hits = hits.slice(0, limit);
 
-    const results = [];
-    let skippedLicense = 0;
-    for (const hit of hits) {
+    // Fetch each result's details in parallel (6 at a time), keeping
+    // the original popularity order.
+    const processed = await mapPool(hits, 6, async (hit) => {
       const id = hit.id;
-      if (!id) continue;
+      if (!id) return { _skipReason: "invalid" };
       let detail = hit;
       try {
         const detailUrl = "https://api.thingiverse.com/things/" + id + "?access_token=" + encodeURIComponent(token);
@@ -199,10 +357,10 @@ app.get("/api/thingiverse-search", async (req, res) => {
       } catch (e) { /* fall back to the search result's own fields */ }
 
       const license = detail.license || hit.license || "";
-      if (!licenseAllowsCommercialUse(license)) { skippedLicense++; continue; }
+      if (!licenseAllowsCommercialUse(license)) return { _skipReason: "license" };
 
       const name = detail.name || detail.title || hit.name || hit.title || "";
-      if (!name) continue;
+      if (!name) return { _skipReason: "invalid" };
 
       const image = pickThingImage(detail) || pickThingImage(hit);
       const creatorName = pickThingCreatorName(detail) || pickThingCreatorName(hit);
@@ -212,13 +370,22 @@ app.get("/api/thingiverse-search", async (req, res) => {
       const attribution = "Design by " + (creatorName || "the original creator") + " on Thingiverse"
         + (thingUrl ? " (" + thingUrl + ")" : "") + ". Licensed: " + (license || "unspecified") + ".";
 
-      results.push({
-        name: name,
-        description: (description ? description + "\n\n" : "") + attribution,
-        image: image,
-        price: "",
-        featured: false,
-      });
+      return {
+        _model: {
+          name: name,
+          description: (description ? description + "\n\n" : "") + attribution,
+          image: image,
+          price: "",
+          featured: false,
+        },
+      };
+    });
+
+    const results = [];
+    let skippedLicense = 0;
+    for (const p of processed) {
+      if (p && p._model) results.push(p._model);
+      else if (p && p._skipReason === "license") skippedLicense++;
     }
 
     res.json({ results: results, skippedLicense: skippedLicense, totalChecked: hits.length });
@@ -228,7 +395,15 @@ app.get("/api/thingiverse-search", async (req, res) => {
   }
 });
 
-app.use(express.static(path.join(__dirname, "public")));
+app.use(express.static(path.join(__dirname, "public"), {
+  setHeaders: function (res, filePath) {
+    // HTML must always be fresh so deploys show up immediately;
+    // static assets are content-fingerprint-free here, so an hour of
+    // caching is a safe bandwidth saver on the free tier.
+    if (filePath.endsWith(".html")) res.setHeader("Cache-Control", "no-cache");
+    else res.setHeader("Cache-Control", "public, max-age=3600");
+  },
+}));
 
 // Any route that isn't an API call or a real file falls back to
 // index.html, since this is a single page that handles its own
