@@ -645,12 +645,12 @@ footer.liquid-glass {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  /* The printer sits slightly left of the frame's center in the
-     footage — bias the crop left (~42%) so the print reads centered
-     on wide screens instead of hugging the right edge. */
-  object-position: 42% 50%;
+  /* Higher % = the crop window slides right over the footage, which
+     shifts the printer LEFT on screen (it sits right-of-center in the
+     source video). 58% lands it near the middle on phones. */
+  object-position: 58% 50%;
   display: block;
-  opacity: 0.45;
+  opacity: 0.62;
 }
 
 /* ============ MOBILE & TOUCH POLISH ============ */
