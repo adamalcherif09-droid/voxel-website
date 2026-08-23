@@ -18,33 +18,31 @@ function App() {
   React.useEffect(function () {
     Promise.all([
       storageGet("voxel-catalog"),
-      storageGet("voxel-inquiries"),
       storageGet("voxel-settings"),
       storageGet("voxel-content"),
     ]).then(function (results) {
       var catalogResult = results[0];
-      var inquiriesResult = results[1];
-      var settingsResult = results[2];
-      var contentResult = results[3];
+      var settingsResult = results[1];
+      var contentResult = results[2];
 
       // A failed read means "unknown state", NOT "empty shop". Seeding
       // defaults over a temporarily-unreadable database is exactly how
       // a real catalog gets erased, so on any read failure we show a
       // retry screen and touch nothing.
-      if (!catalogResult.ok || !inquiriesResult.ok || !settingsResult.ok || !contentResult.ok) {
+      if (!catalogResult.ok || !settingsResult.ok || !contentResult.ok) {
         setLoadError(true);
         return;
       }
 
       var savedCatalog = catalogResult.value;
-      var savedInquiries = inquiriesResult.value;
       var savedSettings = settingsResult.value;
       var savedContent = contentResult.value;
 
-      var catalogPromise;
+      // The SERVER seeds defaults for any missing key at startup, so
+      // the browser never needs (and is never allowed) to write shop
+      // data without an admin session.
       if (savedCatalog) {
         setCatalog({ categories: savedCatalog.categories || [], models: savedCatalog.models || [] });
-        catalogPromise = Promise.resolve();
         // If this page was opened from a link that points at one
         // specific model (the seller tapping the link inside a
         // WhatsApp order message, for example), open that model's
@@ -58,46 +56,25 @@ function App() {
         } catch (e) { /* no query string support — just show the home page */ }
       } else {
         setCatalog({ categories: DEFAULT_CATEGORIES, models: [] });
-        catalogPromise = storageSet("voxel-catalog", { categories: DEFAULT_CATEGORIES, models: [] });
       }
 
-      setInquiries(savedInquiries || []);
+      // Inquiries are private (customer names/notes) — they are loaded
+      // with the admin session token only after the owner passes the
+      // gate, never on the public page load.
+      setInquiries([]);
 
-      var settingsPromise;
       if (savedSettings) {
         var savedSecurity = Object.assign({}, savedSettings.security || {});
-        // Migrate a pre-hash plaintext passcode (from before this update)
-        // into a hash, rather than silently reverting to the default one.
-        // The write-back here is best-effort and intentionally unauthenticated:
-        // it may be rejected for an existing doc (fine — the migrated hash
-        // lives in state and gets persisted on the owner's next real save).
-        var migrationStep = Promise.resolve();
-        if (!savedSecurity.passcodeHash && savedSecurity.passcode) {
-          migrationStep = sha256(savedSecurity.passcode).then(function (hash) {
-            savedSecurity.passcodeHash = hash;
-          });
-        }
-        settingsPromise = migrationStep.then(function () {
-          delete savedSecurity.passcode;
-          var mergedSettings = Object.assign({}, DEFAULT_SETTINGS, savedSettings, {
-            security: Object.assign({}, DEFAULT_SECURITY, savedSecurity),
-          });
-          setSettings(mergedSettings);
-          return storageSet("voxel-settings", mergedSettings);
+        var mergedSettings = Object.assign({}, DEFAULT_SETTINGS, savedSettings, {
+          security: Object.assign({}, DEFAULT_SECURITY, savedSecurity),
         });
+        setSettings(mergedSettings);
       } else {
         setSettings(DEFAULT_SETTINGS);
-        settingsPromise = storageSet("voxel-settings", DEFAULT_SETTINGS);
       }
 
-      var contentPromise;
-      var mergedContent = savedContent ? Object.assign({}, DEFAULT_CONTENT, savedContent) : DEFAULT_CONTENT;
-      setContent(mergedContent);
-      contentPromise = savedContent ? Promise.resolve() : storageSet("voxel-content", mergedContent);
-
-      Promise.all([catalogPromise, settingsPromise, contentPromise]).then(function () {
-        setLoading(false);
-      });
+      setContent(savedContent ? Object.assign({}, DEFAULT_CONTENT, savedContent) : DEFAULT_CONTENT);
+      setLoading(false);
     });
   }, []);
 
@@ -158,18 +135,13 @@ function App() {
       channel: channel,
       createdAt: Date.now(),
     };
-    // Append through the public endpoint (server caps the list). If the
-    // current list can't be read reliably, skip saving rather than risk
-    // overwriting history — the Discord ping below still fires.
-    storageGet("voxel-inquiries").then(function (result) {
-      if (!result.ok) return;
-      var latest = result.value || [];
-      var known = latest.some(function (i) { return i && i.id === entry.id; });
-      if (known) return;
-      setInquiries([entry].concat(latest));
-      saveInquiryRemote(entry);
-    });
-    pingDiscord(settings.webhookUrl, "New inquiry via " + channel + ": " + entry.label + (entry.note ? " — " + entry.note : ""));
+    // Append through the public endpoint — the server sanitizes,
+    // de-duplicates, and caps the list. No pre-read here: the inquiry
+    // list is owner-private now, and the server serializes writes so
+    // simultaneous customers can't erase each other's entries.
+    setInquiries(function (prev) { return [entry].concat(prev); });
+    saveInquiryRemote(entry);
+    apiPingDiscord("New inquiry via " + channel + ": " + entry.label + (entry.note ? " — " + entry.note : ""));
   }
 
   function addCategory(name) {
@@ -216,6 +188,12 @@ function App() {
   function handleGateSuccess() {
     setIsAdmin(true);
     setView("admin");
+    // The inquiry list is owner-private: pull it now, with the admin
+    // session token the gate just obtained. Best-effort — the dashboard
+    // shows an empty state if it can't be read.
+    apiGetInquiries().then(function (result) {
+      if (result.ok && Array.isArray(result.value)) setInquiries(result.value);
+    });
   }
 
   if (loadError) {

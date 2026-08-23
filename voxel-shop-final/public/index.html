@@ -9,6 +9,12 @@
   <link rel="icon" type="image/png" href="/logo.png" />
   <link rel="apple-touch-icon" href="/logo.png" />
 
+  <!-- Warm the connections to the CDN (React/Babel) and Google Fonts
+     early, so the actual downloads start sooner on a cold visit. -->
+  <link rel="preconnect" href="https://unpkg.com" crossorigin />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+
   <!-- These control what shows up when this site's link is shared on
        WhatsApp, Instagram, iMessage, Facebook, etc: the logo photo,
        title, and description shown under the link.

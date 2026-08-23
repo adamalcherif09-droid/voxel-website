@@ -37,15 +37,14 @@ function AdminGate(props) {
   function submitPassword() {
     if (checking || !pw) return;
     setChecking(true);
-    sha256(pw).then(function (hash) {
+    // The server is the single source of truth for the passcode — it
+    // verifies and returns a short-lived admin session token. The hash
+    // is never shipped to browsers, so it can't be brute-forced offline.
+    apiAuth(pw).then(function (token) {
       setChecking(false);
-      if (hash === sec.passcodeHash) {
-        var entered = pw;
+      if (token) {
         setPw("");
-        // Ask the server for a short-lived admin session token so
-        // dashboard saves are authorized. The dashboard still opens
-        // even if this fails — saves would just warn until it works.
-        apiAuth(entered).then(function () { props.onSuccess(); });
+        props.onSuccess();
         return;
       }
       var nextAttempts = attempts + 1;
@@ -795,6 +794,10 @@ function AdminSettings(props) {
   var security = settings.security || DEFAULT_SECURITY;
   var pricing = settings.pricing || DEFAULT_SETTINGS.pricing;
   var _webhookUrl = React.useState(settings.webhookUrl || ""); var webhookUrl = _webhookUrl[0]; var setWebhookUrl = _webhookUrl[1];
+  // The saved webhook URL itself never reaches the browser — only this
+  // yes/no flag does. Tracked locally too, so the UI updates the moment
+  // the owner saves one.
+  var _webhookSet = React.useState(!!settings._webhookSet); var webhookSet = _webhookSet[0]; var setWebhookSet = _webhookSet[1];
   var _pingSent = React.useState(false); var pingSent = _pingSent[0]; var setPingSent = _pingSent[1];
   var _comboBuilder = React.useState([]); var comboBuilder = _comboBuilder[0]; var setComboBuilder = _comboBuilder[1];
   var _triggerClicks = React.useState(security.triggerClicks); var triggerClicks = _triggerClicks[0]; var setTriggerClicks = _triggerClicks[1];
@@ -840,7 +843,11 @@ function AdminSettings(props) {
       setSavingPasscode(false);
       props.updateSettings(function (prev) {
         var next = Object.assign({}, prev);
-        next.security = Object.assign({}, prev.security || DEFAULT_SECURITY, { passcodeHash: hash });
+        // _updatePasscode tells the server this hash is an intentional
+        // change — without it the server preserves the stored one,
+        // because the dashboard never receives the current hash back
+        // (it's stripped from public reads for safety).
+        next.security = Object.assign({}, prev.security || DEFAULT_SECURITY, { passcodeHash: hash, _updatePasscode: true });
         return next;
       });
       setPasscode("");
@@ -848,7 +855,18 @@ function AdminSettings(props) {
     });
   }
   function saveWebhook() {
-    props.updateSettings(function (prev) { var next = Object.assign({}, prev); next.webhookUrl = webhookUrl; return next; });
+    props.updateSettings(function (prev) {
+      var next = Object.assign({}, prev);
+      // _updateWebhook tells the server this URL is an intentional
+      // change — the current URL is never sent back to the browser,
+      // so the server preserves it unless this flag is set.
+      next._updateWebhook = true;
+      next.webhookUrl = webhookUrl;
+      return next;
+    });
+    setWebhookSet(true);
+    setWebhookUrl("");
+    flashSec("Webhook saved — it stays hidden from the site.");
   }
   function savePricing() {
     props.updateSettings(function (prev) {
@@ -865,8 +883,8 @@ function AdminSettings(props) {
     setTimeout(function () { setPricingMsg(""); }, 4000);
   }
   function testPing() {
-    pingDiscord(webhookUrl, "This is a test ping from your website.").then(function () {
-      setPingSent(true);
+    apiPingDiscord("This is a test ping from your website.").then(function (ok) {
+      setPingSent(ok);
       setTimeout(function () { setPingSent(false); }, 3000);
     });
   }
@@ -950,11 +968,16 @@ function AdminSettings(props) {
       <section>
         <h3 className="font-display text-lg mb-2" style={{ color: "var(--ink)" }}>Get notified in Discord</h3>
         <p className="text-sm mb-3" style={{ color: "var(--ink-dim)" }}>
-          Paste a Discord webhook link to get pinged there whenever someone taps Order now. In Discord: Server Settings → Integrations → Webhooks → New Webhook → Copy URL.
+          Paste a Discord webhook link to get pinged there whenever someone taps Order now. In Discord: Server Settings → Integrations → Webhooks → New Webhook → Copy URL. The link is stored on the server only — visitors can never see, spam, or delete it.
         </p>
+        {(webhookSet || webhookUrl) && (
+          <p className="text-xs mb-2 font-mono-ac" style={{ color: "var(--teal)" }}>
+            {webhookSet ? "A webhook is saved and hidden. Paste a new link below to replace it, or test it as-is." : ""}
+          </p>
+        )}
         <div className="flex gap-2">
-          <input value={webhookUrl} onChange={function (e) { setWebhookUrl(e.target.value); }} placeholder="https://discord.com/api/webhooks/..." className="flex-1 px-3.5 py-2.5 rounded-md text-sm font-mono-ac" style={{ background: "var(--panel)", border: "1px solid var(--line)", color: "var(--ink)" }} />
-          <SecondaryButton onClick={saveWebhook}>Save</SecondaryButton>
+          <input value={webhookUrl} onChange={function (e) { setWebhookUrl(e.target.value); }} placeholder={webhookSet ? "Saved — paste a new link to replace" : "https://discord.com/api/webhooks/..."} className="flex-1 px-3.5 py-2.5 rounded-md text-sm font-mono-ac" style={{ background: "var(--panel)", border: "1px solid var(--line)", color: "var(--ink)" }} />
+          <SecondaryButton onClick={saveWebhook} disabled={!webhookUrl.trim()}>Save</SecondaryButton>
         </div>
         <div className="flex items-center gap-3 mt-3">
           <SecondaryButton onClick={testPing} icon={Send}>Send test ping</SecondaryButton>

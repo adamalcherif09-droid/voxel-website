@@ -252,8 +252,8 @@ function storageSet(key, value, opts) {
 }
 
 // Appends one inquiry through the public append-only endpoint. The
-// server caps and sanitizes the list, so customers never need (and
-// never receive) admin powers.
+// server caps, sanitizes, de-duplicates and serializes the list, so
+// customers never need (and never receive) admin powers.
 function saveInquiryRemote(entry) {
   return fetch("/api/inquiries", {
     method: "POST",
@@ -261,6 +261,41 @@ function saveInquiryRemote(entry) {
     body: JSON.stringify({ entry: entry }),
   })
     .then(function (res) { return res.ok; })
+    .catch(function () { return false; });
+}
+
+// Owner-only: reads the inquiry list with the admin session token.
+// The server refuses inquiry reads without one — customer notes are
+// private (they often contain names and phone numbers).
+function apiGetInquiries() {
+  var headers = {};
+  var token = getAdminApiToken();
+  if (token) headers["x-voxel-token"] = token;
+  return fetch("/api/storage/voxel-inquiries", { headers: headers })
+    .then(function (res) {
+      if (!res.ok) return { ok: false, value: null };
+      return res.json().then(function (data) {
+        try {
+          return { ok: true, value: data && data.value ? JSON.parse(data.value) : [] };
+        } catch (e) {
+          return { ok: false, value: null };
+        }
+      });
+    })
+    .catch(function () { return { ok: false, value: null }; });
+}
+
+// Discord notifications are relayed by the server: the webhook URL
+// lives only there, so visitors can never read, spam, or delete it.
+// Resolves to true when the ping was delivered.
+function apiPingDiscord(content) {
+  return fetch("/api/ping-discord", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ content: String(content || "").slice(0, 500) }),
+  })
+    .then(function (res) { return res.ok ? res.json() : { ok: false }; })
+    .then(function (json) { return !!(json && json.ok); })
     .catch(function () { return false; });
 }
 
@@ -351,11 +386,3 @@ function compressDataUrl(dataUrl, options) {
   });
 }
 
-function pingDiscord(webhookUrl, content) {
-  if (!webhookUrl) return Promise.resolve();
-  return fetch(webhookUrl, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ content: content }),
-  }).catch(function () { /* best effort only, never blocks the flow */ });
-}
