@@ -650,7 +650,7 @@ footer.liquid-glass {
      source video). 58% lands it near the middle on phones. */
   object-position: 58% 50%;
   display: block;
-  opacity: 0.62;
+  opacity: 0.5;
 }
 
 /* ============ MOBILE & TOUCH POLISH ============ */
