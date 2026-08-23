@@ -1027,7 +1027,7 @@ function AdminView(props) {
     { id: "settings", label: "Settings", icon: SettingsIcon },
   ];
   return (
-    <div className="max-w-6xl mx-auto px-5 sm:px-8 py-10">
+    <div className="voxel-admin-view max-w-6xl mx-auto px-5 sm:px-8 py-10">
       <div className="flex items-center justify-between mb-8">
         <div>
           <Eyebrow>Owner dashboard</Eyebrow>

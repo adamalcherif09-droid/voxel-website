@@ -767,6 +767,13 @@
     // Every view change is another chance to offer the iOS tilt
     // permission pill, until it's used or dismissed for the session.
     if (retagTiltPill) retagTiltPill();
+    // The owner dashboard is a work area, not a storefront — no film
+    // behind the forms. Toggled on every view change so it comes back
+    // the moment they leave the dashboard.
+    var film = document.querySelector(".voxel-scrollfilm");
+    if (film) {
+      film.classList.toggle("voxel-film-hidden", !!document.querySelector(".voxel-admin-view"));
+    }
   }
 
   /* --- Tap bloom on glass buttons ---

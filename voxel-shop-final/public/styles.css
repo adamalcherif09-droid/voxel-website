@@ -651,8 +651,10 @@ footer.liquid-glass {
      source video). 58% lands it near the middle on phones. */
   object-position: 58% 50%;
   display: block;
-  opacity: 0.38;
+  opacity: 0.33;
 }
+/* Film is hidden entirely while the owner dashboard is open. */
+.voxel-film-hidden { display: none; }
 /* Readability veil: a canvas-colored wash over the film, strongest at
    the top (hero headline) and bottom (footer links) where text sits
    directly on the page, lightest in the middle where cards and panels
@@ -677,6 +679,12 @@ footer.liquid-glass {
   color: #000 !important;
   text-shadow: none !important;
 }
+
+/* Small text bumped a touch for readability (12px -> ~13px, 14px -> ~15px).
+   Higher specificity than the tailwind utilities, so cascade order
+   doesn't matter. Desktop and mobile alike. */
+.voxel-root .text-xs { font-size: 0.82rem; }
+.voxel-root .text-sm { font-size: 0.95rem; }
 
 /* ============ MOBILE & TOUCH POLISH ============ */
 
