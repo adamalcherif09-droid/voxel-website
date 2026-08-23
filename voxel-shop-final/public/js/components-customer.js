@@ -169,7 +169,7 @@ function HomeView(props) {
       </section>
 
       <section className="pb-16">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-5 p-6 sm:p-8 rounded-lg" style={{ border: "1px dashed var(--brass)", background: "var(--brass-soft)" }}>
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-5 p-6 sm:p-8 rounded-lg" style={{ border: "1px dashed var(--brass)", background: "rgba(230, 219, 211, 0.62)" }}>
           <div>
             <div className="font-display text-lg" style={{ color: "var(--ink)" }}>{content.customCtaHeading}</div>
             <p className="text-sm mt-1 max-w-md" style={{ color: "var(--ink-dim)" }}>{content.customCtaBody}</p>
