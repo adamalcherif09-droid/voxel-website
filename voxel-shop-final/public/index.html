@@ -48,6 +48,34 @@
   <link rel="stylesheet" href="/tailwind.css" />
 </head>
 <body>
+  <!-- One-time branded intro (per browser session): the VOXEL mark
+       assembles layer-by-layer like a print, then lifts away. Pure
+       CSS — it dismisses itself even if scripts fail, and a tiny
+       inline check hides it instantly on repeat visits. -->
+  <div id="voxel-intro" aria-hidden="true">
+    <div class="voxel-intro-inner">
+      <div class="voxel-intro-mark">
+        <span class="intro-bar b1"></span>
+        <span class="intro-bar b2"></span>
+        <span class="intro-bar b3"></span>
+      </div>
+      <div class="voxel-intro-wordmark">
+        <span>V</span><span>O</span><span>X</span><span>E</span><span>L</span>
+      </div>
+      <div class="voxel-intro-tagline">Custom&nbsp;3D&nbsp;Printing</div>
+      <div class="voxel-intro-sweep"></div>
+    </div>
+  </div>
+  <script>
+    try {
+      if (sessionStorage.getItem("voxel-intro-done")) {
+        var introEl = document.getElementById("voxel-intro");
+        if (introEl) introEl.classList.add("voxel-intro-skip");
+      } else {
+        sessionStorage.setItem("voxel-intro-done", "1");
+      }
+    } catch (e) { /* storage blocked — intro just plays once per visit */ }
+  </script>
   <div id="root"></div>
 
   <!-- React itself, loaded straight from a CDN — no npm install, no build step. -->

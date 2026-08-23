@@ -22,6 +22,10 @@ html, body {
   color: var(--ink);
   font-family: 'Inter', sans-serif;
   min-height: 100vh;
+  /* Stacking context so the scroll-film layer's negative z-index sits
+     between the page background and every piece of content. */
+  position: relative;
+  isolation: isolate;
 }
 
 .voxel-root * { box-sizing: border-box; }
@@ -141,13 +145,13 @@ h1.voxel-reveal {
 /* Scroll-triggered section/card reveals */
 .voxel-observe {
   opacity: 0;
-  transform: translateY(18px);
-  transition: opacity 0.6s cubic-bezier(.2,.7,.2,1), transform 0.6s cubic-bezier(.2,.7,.2,1);
+  transform: translateY(26px) scale(0.985);
+  transition: opacity 0.75s cubic-bezier(.2,.7,.2,1), transform 0.75s cubic-bezier(.2,.7,.2,1);
   transition-delay: var(--stagger, 0ms);
 }
 .voxel-observe.voxel-in-view {
   opacity: 1;
-  transform: translateY(0);
+  transform: translateY(0) scale(1);
 }
 
 /* Card hover — 3D tilt driven by JS (pointer position), CSS just
@@ -375,28 +379,219 @@ button:active {
 }
 
 .voxel-tilt-permission {
+  /* Deliberately quiet: a small ghost pill tucked in the bottom-right
+     corner, styled like the rest of the glass language. It offers the
+     gyroscope feature without shouting for attention. */
   position: fixed;
-  left: 50%;
-  /* Below the sticky header (~93px tall with the logo), not overlapping
-     it — at top:76px the pill's upper half was hidden behind the header. */
-  top: 104px;
-  transform: translateX(-50%);
-  z-index: 40;
-  padding: 10px 16px;
+  right: 14px;
+  bottom: 14px;
+  bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+  z-index: 30;
+  padding: 8px 14px;
   border-radius: 999px;
-  border: 0;
+  border: 1px solid rgba(22,22,24,0.14);
   cursor: pointer;
-  font-size: 13px;
+  font-size: 12px;
   font-family: 'Inter', sans-serif;
   font-weight: 500;
-  color: #161618;
-  background: rgba(230, 219, 211, 0.95);
-  box-shadow: 0 8px 20px rgba(22,22,24,0.18), inset 0 1px 0 rgba(255,255,255,0.5);
-  animation: voxelPermissionIn 0.4s cubic-bezier(.2,.85,.35,1.25) both;
+  color: var(--ink-dim);
+  background: rgba(230,219,211,0.88);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  box-shadow: 0 4px 14px rgba(22,22,24,0.10);
+  animation: voxelPermissionIn 0.45s cubic-bezier(.2,.7,.2,1) both;
 }
 @keyframes voxelPermissionIn {
-  from { opacity: 0; transform: translateX(-50%) translateY(-20px); }
-  to { opacity: 1; transform: translateX(-50%) translateY(0); }
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ============ STAGE 3 — MOTION GRAPHICS ============ */
+
+/* --- One-time branded intro (markup lives in index.html) ---
+   Pure CSS: it dismisses itself even if JavaScript never runs. */
+#voxel-intro {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: var(--canvas);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none; /* visuals only — never blocks taps */
+  animation: voxelIntroOut 0.5s ease 1.35s both;
+}
+#voxel-intro.voxel-intro-skip { display: none; }
+.voxel-intro-inner { display: flex; flex-direction: column; align-items: center; }
+.voxel-intro-mark { display: flex; flex-direction: column; align-items: center; gap: 5px; }
+.intro-bar {
+  height: 8px;
+  border-radius: 4px;
+  background: var(--brass);
+  transform-origin: center;
+  animation: voxelBarIn 0.55s cubic-bezier(0.34,1.4,0.4,1) both;
+}
+.intro-bar.b1 { width: 52px; animation-delay: 0.05s; }
+.intro-bar.b2 { width: 34px; opacity: 0.78; animation-delay: 0.15s; }
+.intro-bar.b3 { width: 17px; opacity: 0.55; animation-delay: 0.25s; }
+.voxel-intro-wordmark {
+  font-family: 'Fraunces', serif;
+  font-size: 30px;
+  color: var(--ink);
+  letter-spacing: 0.05em;
+  margin-top: 16px;
+}
+.voxel-intro-wordmark span {
+  display: inline-block;
+  opacity: 0;
+  transform: translateY(14px);
+  animation: voxelIntroLetter 0.55s cubic-bezier(.2,.7,.2,1) forwards;
+}
+.voxel-intro-wordmark span:nth-child(1) { animation-delay: 0.35s; }
+.voxel-intro-wordmark span:nth-child(2) { animation-delay: 0.41s; }
+.voxel-intro-wordmark span:nth-child(3) { animation-delay: 0.47s; }
+.voxel-intro-wordmark span:nth-child(4) { animation-delay: 0.53s; }
+.voxel-intro-wordmark span:nth-child(5) { animation-delay: 0.59s; }
+.voxel-intro-tagline {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+  margin-top: 10px;
+  opacity: 0;
+  animation: voxelIntroFade 0.6s ease 0.75s forwards;
+}
+.voxel-intro-sweep {
+  width: 130px;
+  height: 2px;
+  margin-top: 18px;
+  border-radius: 1px;
+  background: var(--brass);
+  transform: scaleX(0);
+  transform-origin: left center;
+  animation: voxelSweepDraw 0.5s cubic-bezier(.2,.7,.2,1) 0.9s forwards;
+}
+@keyframes voxelIntroLetter {
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes voxelIntroFade {
+  to { opacity: 1; }
+}
+@keyframes voxelSweepDraw {
+  to { transform: scaleX(1); }
+}
+@keyframes voxelIntroOut {
+  from { opacity: 1; }
+  to { opacity: 0; visibility: hidden; }
+}
+
+/* --- Floating voxel particles behind the hero ---
+   A canvas injected by motion.js into .voxel-hero-fx. The section
+   gets isolation so the canvas can sit at z-index -1, safely between
+   the page background and the content. Soft mask fades the edges so
+   the field never ends in a hard line. */
+.voxel-hero {
+  position: relative;
+  isolation: isolate;
+}
+.voxel-hero-fx {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  overflow: hidden;
+  -webkit-mask-image: radial-gradient(115% 90% at 50% 25%, black 38%, transparent 82%);
+  mask-image: radial-gradient(115% 90% at 50% 25%, black 38%, transparent 82%);
+}
+.voxel-hero-fx canvas { width: 100%; height: 100%; display: block; }
+
+/* --- Eyebrow underline draw-on-scroll ---
+   Absolutely positioned brass stroke under section labels; no layout
+   shift, draws from the left when scrolled into view (motion.js adds
+   .voxel-drawn once). */
+.voxel-eyebrow { position: relative; }
+.voxel-eyebrow::after {
+  content: "";
+  position: absolute;
+  left: 1px;
+  bottom: -7px;
+  width: 36px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--brass);
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition: transform 0.7s cubic-bezier(.2,.7,.2,1) 0.2s;
+}
+.voxel-eyebrow.voxel-drawn::after { transform: scaleX(1); }
+
+/* --- Tap bloom on glass buttons ---
+   One-shot radial highlight blooming from the exact tap point
+   (--mx/--my are set by motion.js on pointerdown), reusing the same
+   visual language as the cursor specular highlight. */
+.liquid-glass::after, .glass-accent::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(150px circle at var(--mx, 50%) var(--my, 50%), rgba(255,255,255,0.5), transparent 60%);
+  opacity: 0;
+  pointer-events: none;
+}
+.voxel-tap::after { animation: voxelTapBloom 0.55s ease-out; }
+@keyframes voxelTapBloom {
+  0% { opacity: 0.85; transform: scale(0.35); }
+  100% { opacity: 0; transform: scale(1.15); }
+}
+
+/* --- Featured-star pop (owner dashboard toggle) ---
+   Pure vertical scale pulse — no rotation, keeps the motion language
+   composed rather than playful. */
+.voxel-pop { animation: voxelStarPop 0.5s cubic-bezier(.34,1.56,.64,1); }
+@keyframes voxelStarPop {
+  0% { transform: scale(1); }
+  35% { transform: scale(1.3); }
+  70% { transform: scale(0.94); }
+  100% { transform: scale(1); }
+}
+
+/* --- Draw-on checkmark for "Copied!" feedback --- */
+.voxel-check { display: inline-flex; }
+.voxel-check svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: var(--teal);
+  stroke-width: 2.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.voxel-check path {
+  stroke-dasharray: 24;
+  stroke-dashoffset: 24;
+  animation: voxelCheckDraw 0.45s ease-out 0.05s forwards;
+}
+@keyframes voxelCheckDraw {
+  to { stroke-dashoffset: 0; }
+}
+
+/* ============ SCROLL-DRIVEN PRINT FILM ============ */
+/* A muted printer time-lapse sits fixed behind everything; scrolling
+   scrubs its playhead, so the print visibly progresses as you move
+   down the page. Low opacity keeps the canvas color as the star.
+   .voxel-root provides the stacking context (see top of this file). */
+.voxel-scrollfilm {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+}
+.voxel-scrollfilm video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  opacity: 0.16;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -426,6 +621,15 @@ button:active {
   .liquid-glass, .glass-accent { transition: none !important; }
   .liquid-glass:active { backdrop-filter: blur(16px) saturate(160%) !important; -webkit-backdrop-filter: blur(16px) saturate(160%) !important; }
   .voxel-magnetic { transform: none !important; }
+
+  /* Stage 3 motion graphics — all static under reduced motion */
+  #voxel-intro { display: none !important; }
+  .voxel-hero-fx { display: none !important; }
+  .voxel-eyebrow::after { transition: none !important; transform: scaleX(1) !important; }
+  .liquid-glass::after, .glass-accent::after { display: none !important; }
+  .voxel-pop { animation: none !important; }
+  .voxel-check { display: none !important; }
+  .voxel-scrollfilm { display: none !important; }
 }
 
 @media (prefers-reduced-transparency: reduce) {
