@@ -55,7 +55,7 @@ function Footer(props) {
           {content.businessName} — {content.footerTagline}
         </span>
         {hasAnything && (
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 font-mono-ac text-xs">
+          <div className="footer-contacts flex flex-wrap items-center gap-x-4 gap-y-1 font-mono-ac text-xs">
             {content.contactEmail && (mailtoUrl ? <a href={mailtoUrl} style={{ color: "inherit", textDecoration: "none" }}>{content.contactEmail}</a> : content.contactEmail)}
             {whatsappDisplayNumber && (whatsappFooterUrl ? <a href={whatsappFooterUrl} target="_blank" rel="noopener noreferrer" style={{ color: "inherit", textDecoration: "none" }}>{whatsappDisplayNumber}</a> : whatsappDisplayNumber)}
             {instagramUrl && <a href={instagramUrl} target="_blank" rel="noopener noreferrer" style={{ color: "inherit", textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 4 }}><Instagram size={14} />Instagram</a>}

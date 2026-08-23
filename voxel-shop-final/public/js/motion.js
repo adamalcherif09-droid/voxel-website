@@ -189,6 +189,7 @@
      at, so it reacts to *changes* in tilt rather than an absolute angle
      that assumes the phone starts out perfectly flat. */
   var retagGyroTargets = null;
+  var retagTiltPill = null;
 
   function initDeviceTilt() {
     if (hasFinePointer) return; // desktop already gets cursor tilt
@@ -259,20 +260,42 @@
       return;
     }
 
-    // iOS 13+ only allows this to be requested from a direct tap.
-    var btn = document.createElement("button");
-    btn.type = "button";
-    btn.className = "voxel-tilt-permission";
-    btn.textContent = "Enable tilt effect";
-    var autoHide = setTimeout(function () { btn.remove(); }, 12000);
-    btn.addEventListener("click", function () {
-      clearTimeout(autoHide);
-      DeviceOrientationEvent.requestPermission().then(function (state) {
-        if (state === "granted") start();
-        btn.remove();
-      }).catch(function () { btn.remove(); });
-    });
-    document.body.appendChild(btn);
+    // iOS 13+ only allows this to be requested from a direct tap, so a
+    // small pill offers it. The pill politely hides itself after a
+    // while BUT comes back on every view change until the user either
+    // enables tilt or explicitly denies it (both remembered for the
+    // session) — it used to vanish forever after 12 seconds, which on
+    // anything slower than a fast first visit made the feature
+    // impossible to ever turn on.
+    var tiltPref = "";
+    try { tiltPref = window.sessionStorage.getItem("voxel-tilt") || ""; } catch (e) { tiltPref = ""; }
+
+    retagTiltPill = function () {
+      if (tiltPref) return;
+      if (document.querySelector(".voxel-tilt-permission")) return;
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "voxel-tilt-permission";
+      btn.setAttribute("aria-label", "Enable tilt effect");
+      btn.textContent = "Enable tilt effect";
+      var autoHide = setTimeout(function () { btn.remove(); }, 12000);
+      btn.addEventListener("click", function () {
+        clearTimeout(autoHide);
+        DeviceOrientationEvent.requestPermission().then(function (state) {
+          if (state === "granted") {
+            tiltPref = "granted";
+            try { window.sessionStorage.setItem("voxel-tilt", "granted"); } catch (e) {}
+            start();
+          } else {
+            tiltPref = "denied";
+            try { window.sessionStorage.setItem("voxel-tilt", "denied"); } catch (e) {}
+          }
+          btn.remove();
+        }).catch(function () { btn.remove(); });
+      });
+      document.body.appendChild(btn);
+    };
+    retagTiltPill();
   }
 
   var boundHeader = null;
@@ -684,7 +707,12 @@
         var max = document.documentElement.scrollHeight - window.innerHeight;
         if (max <= 0) return 0;
         var k = window.scrollY / max;
-        return k - Math.floor(k);
+        // iOS rubber-band overscroll reports negative scrollY at the
+        // top (and past-the-end at the bottom); without clamping, the
+        // wrap-around below made the film jump to its final frame.
+        if (k <= 0) return 0;
+        k = k - Math.floor(k); // past one full page height: wrap and replay
+        return k;
       }
       function tick() {
         rafId = 0;
@@ -708,6 +736,13 @@
       window.addEventListener("resize", scheduleTick, { passive: true });
       video.addEventListener("loadedmetadata", function () {
         duration = video.duration || 0;
+        // iOS Safari ignores preload="auto" and buffers nothing until a
+        // play is requested — so scroll-scrubbing had no frames to seek
+        // to and the film stayed invisible on iPhones. A muted
+        // play()+pause() forces it to fetch the data; the very next
+        // tick re-positions the playhead anyway.
+        var p = video.play();
+        if (p && p.then) p.then(function () { video.pause(); }).catch(function () {});
         scheduleTick();
       });
       video.addEventListener("error", function () {
@@ -721,6 +756,9 @@
     scanEyebrows(node);
     scanCountups(node);
     scanScrollFilm(node);
+    // Every view change is another chance to offer the iOS tilt
+    // permission pill, until it's used or dismissed for the session.
+    if (retagTiltPill) retagTiltPill();
   }
 
   /* --- Tap bloom on glass buttons ---
