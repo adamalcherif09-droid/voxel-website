@@ -578,8 +578,9 @@ button:active {
 /* ============ SCROLL-DRIVEN PRINT FILM ============ */
 /* A muted printer time-lapse sits fixed behind everything; scrolling
    scrubs its playhead, so the print visibly progresses as you move
-   down the page. Low opacity keeps the canvas color as the star.
-   .voxel-root provides the stacking context (see top of this file). */
+   down the page. 0.35 opacity keeps text readable while the film
+   stays clearly noticeable. .voxel-root provides the stacking
+   context (see top of this file). */
 .voxel-scrollfilm {
   position: fixed;
   inset: 0;
@@ -591,7 +592,7 @@ button:active {
   height: 100%;
   object-fit: cover;
   display: block;
-  opacity: 0.16;
+  opacity: 0.35;
 }
 
 @media (prefers-reduced-motion: reduce) {

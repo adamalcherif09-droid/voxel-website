@@ -458,6 +458,21 @@
      reach any of this code (early return at the top).
      ========================================================= */
 
+  // MutationObserver hands us whatever node React happened to insert —
+  // sometimes an ancestor containing our targets, sometimes the target
+  // itself. querySelectorAll can't match the node it's called on, so
+  // every scanner uses this to check self + descendants together.
+  function collect(node, selector) {
+    var out = [];
+    if (!node) return out;
+    if (node.matches && node.matches(selector)) out.push(node);
+    if (node.querySelectorAll) {
+      var found = node.querySelectorAll(selector);
+      for (var i = 0; i < found.length; i++) out.push(found[i]);
+    }
+    return out;
+  }
+
   /* --- Floating voxel field behind the hero ---
      Deliberately NOT random: voxels sit in an orderly lattice and
      breathe bottom-to-top in a fixed sequence, echoing how a 3D print
@@ -471,7 +486,7 @@
   }
 
   function scanHeroParticles(root) {
-    root.querySelectorAll(".voxel-hero-fx").forEach(function (host) {
+    collect(root, ".voxel-hero-fx").forEach(function (host) {
       if (host.dataset.voxelfxInit) return;
       host.dataset.voxelfxInit = "1";
       if (navigator.deviceMemory && navigator.deviceMemory < 4) return; // low-end device: keep it calm
@@ -534,7 +549,7 @@
           var v = voxels[i];
           var k = (((t + v.offset) % v.period) + v.period) % v.period / v.period; // 0..1 life position
           var bell = Math.sin(Math.PI * k);      // smooth 0 -> 1 -> 0
-          var alpha = 0.15 * bell * bell;        // ease toward the edges of the breath
+          var alpha = 0.2 * bell * bell;         // ease toward the edges of the breath
           if (alpha < 0.008) continue;
           var lift = -7 * bell;                  // rises slightly mid-breath, settles back
           ctx.globalAlpha = alpha;
@@ -587,7 +602,7 @@
 
   function scanEyebrows(root) {
     if (!eyebrowObserver) return;
-    root.querySelectorAll(".voxel-eyebrow").forEach(function (el) {
+    collect(root, ".voxel-eyebrow").forEach(function (el) {
       if (el.dataset.voxelEyebrow) return;
       el.dataset.voxelEyebrow = "1";
       eyebrowObserver.observe(el);
@@ -621,7 +636,7 @@
 
   function scanCountups(root) {
     if (!countupObserver) return;
-    root.querySelectorAll("[data-countup]").forEach(function (el) {
+    collect(root, "[data-countup]").forEach(function (el) {
       if (el.dataset.voxelCountupInit) return;
       el.dataset.voxelCountupInit = "1";
       countupObserver.observe(el);
@@ -639,7 +654,10 @@
      Reduced-motion users never reach this code, and CSS hides the
      layer regardless. */
   function scanScrollFilm(node) {
-    node.querySelectorAll(".voxel-root").forEach(function (rootEl) {
+    // .voxel-root is often the inserted node ITSELF (React mounts the
+    // whole app as one child of #root) — collect() matches it where
+    // querySelectorAll alone silently missed it.
+    collect(node, ".voxel-root").forEach(function (rootEl) {
       if (rootEl.dataset.voxelfilmInit) return;
       rootEl.dataset.voxelfilmInit = "1";
 
@@ -659,16 +677,27 @@
 
       var duration = 0, current = 0, rafId = 0;
 
+      // Unclamped scroll fraction — scrolling PAST one full page height
+      // wraps back around, so an eager scroller simply re-watches the
+      // print build all over again instead of hitting a frozen last frame.
       function pageProgress() {
         var max = document.documentElement.scrollHeight - window.innerHeight;
-        return max > 0 ? Math.min(1, Math.max(0, window.scrollY / max)) : 0;
+        if (max <= 0) return 0;
+        var k = window.scrollY / max;
+        return k - Math.floor(k);
       }
       function tick() {
         rafId = 0;
         if (!duration) return;
         var want = pageProgress() * duration;
-        current += (want - current) * 0.22; // buttery catch-up toward the scroll target
-        if (Math.abs(want - current) < 0.03) current = want;
+        // Crossing the loop seam would make the lerp rewind the whole
+        // print in one frame — snap instead when the gap is huge.
+        if (Math.abs(want - current) > duration * 0.5) {
+          current = want;
+        } else {
+          current += (want - current) * 0.22; // buttery catch-up toward the scroll target
+          if (Math.abs(want - current) < 0.03) current = want;
+        }
         try { video.currentTime = current; } catch (e) {}
         if (Math.abs(want - current) >= 0.03) rafId = requestAnimationFrame(tick);
       }
@@ -789,6 +818,15 @@
     initMagneticButtons();
     var root = document.getElementById("root");
     initCopyFlash(root);
+    // Belt and braces for the film: React's mount timing varies, so a
+    // few delayed retries guarantee the layer exists no matter how the
+    // first commits landed (the dataset guard prevents doubles).
+    [200, 900, 2500].forEach(function (delay) {
+      setTimeout(function () {
+        var rootEl = document.querySelector(".voxel-root");
+        if (rootEl) scanScrollFilm(rootEl);
+      }, delay);
+    });
   }
 
   if (document.readyState === "loading") {
