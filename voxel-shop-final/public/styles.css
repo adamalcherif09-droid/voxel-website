@@ -551,19 +551,9 @@ footer.liquid-glass {
   /* NOTE: deliberately NO isolation here — the hero headline uses
      mix-blend-mode: difference and must blend against the film and
      page background beneath it, not just its own (transparent) box. */
-}
-/* Contrast amplifier behind the hero text zone: pushes the film's
-   values toward the extremes BEFORE the difference blend, so glyph
-   pixels land nearer pure black/white — much crisper flips, even
-   mid-letter. Gracefully absent in browsers without backdrop-filter
-   (text still blends, just softer). */
-.voxel-hero::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  backdrop-filter: contrast(1.75) saturate(1.15);
-  -webkit-backdrop-filter: contrast(1.75) saturate(1.15);
-  pointer-events: none;
+  /* And NO backdrop-filter amplifier either — it tinted a visible
+     rectangle over the canvas. All the intensity comes from the film's
+     own contrast below. */
 }
 .voxel-hero-fx {
   position: absolute;
@@ -667,10 +657,10 @@ footer.liquid-glass {
   object-position: 58% 50%;
   display: block;
   opacity: 0.33;
-  /* Extra contrast punch: deeper darks and brighter brights in the
-     footage give the difference-blended hero text a stronger signal
-     to flip against. */
-  filter: contrast(1.3);
+  /* Heavy contrast: the footage swings between near-black and near-
+     white, which is what gives the difference-blended hero text its
+     extreme, crisp per-pixel color flips. */
+  filter: contrast(2.6) saturate(1.25);
 }
 /* Film is hidden entirely while the owner dashboard is open. */
 .voxel-film-hidden { display: none; }
