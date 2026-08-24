@@ -659,10 +659,7 @@ footer.liquid-glass {
   /* Essentially opaque (5% transparent) — the film is a real backdrop
      now, and the difference-blended text feeds off its full colors. */
   opacity: 0.95;
-  /* Heavy contrast: the footage swings between near-black and near-
-     white, which is what gives the difference-blended hero text its
-     extreme, crisp per-pixel color flips. */
-  filter: contrast(2.6) saturate(1.25);
+  /* NO contrast/saturation filters — footage keeps its real colors. */
 }
 /* Film is hidden entirely while the owner dashboard is open. */
 .voxel-film-hidden { display: none; }
@@ -683,6 +680,16 @@ footer.liquid-glass {
   .voxel-hero .voxel-fade {
     color: #fff !important;
     mix-blend-mode: difference !important;
+    /* Intensity boost: a hard 1px outline (no blur = no glow) that is
+       itself difference-blended, so it renders as an inverted ring
+       around every glyph — effectively bolder text with razor edges
+       over any footage, light or dark. */
+    -webkit-text-stroke: 0.6px #fff;
+    text-shadow:
+      1px 0 0 #fff,
+      -1px 0 0 #fff,
+      0 1px 0 #fff,
+      0 -1px 0 #fff;
   }
 }
 /* The same adaptive treatment for the small section labels ("Featured",
@@ -699,6 +706,12 @@ footer.liquid-glass {
   .voxel-on-film {
     color: #fff !important;
     mix-blend-mode: difference !important;
+    -webkit-text-stroke: 0.4px #fff;
+    text-shadow:
+      0.5px 0 0 #fff,
+      -0.5px 0 0 #fff,
+      0 0.5px 0 #fff,
+      0 -0.5px 0 #fff;
   }
 }
 
