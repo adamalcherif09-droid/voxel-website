@@ -713,7 +713,7 @@
       wrap.appendChild(video);
       rootEl.insertBefore(wrap, rootEl.firstChild);
 
-      var duration = 0, current = 0, rafId = 0;
+      var duration = 0, current = 0, lastSeeked = -1, rafId = 0;
 
       // Unclamped scroll fraction — scrolling PAST one full page height
       // wraps back around, so an eager scroller simply re-watches the
@@ -733,16 +733,23 @@
         rafId = 0;
         if (!duration) return;
         var want = pageProgress() * duration;
-        // Crossing the loop seam would make the lerp rewind the whole
-        // print in one frame — snap instead when the gap is huge.
-        if (Math.abs(want - current) > duration * 0.5) {
+        var delta = want - current;
+        // A long fast fling would otherwise chase the target for dozens
+        // of frames (a seek storm); snap most of the distance instantly.
+        if (Math.abs(delta) > duration * 0.2) {
           current = want;
         } else {
-          current += (want - current) * 0.22; // buttery catch-up toward the scroll target
-          if (Math.abs(want - current) < 0.03) current = want;
+          current += delta * 0.3; // buttery catch-up toward the scroll target
+          if (Math.abs(want - current) < 0.05) current = want;
         }
-        try { video.currentTime = current; } catch (e) {}
-        if (Math.abs(want - current) >= 0.03) rafId = requestAnimationFrame(tick);
+        // Never stack seeks: while the decoder is still seeking, skip —
+        // the next frame retries. Queued seeks are exactly what made
+        // fast scrolling stutter.
+        if (!video.seeking && Math.abs(current - lastSeeked) > 0.05) {
+          lastSeeked = current;
+          try { video.currentTime = current; } catch (e) {}
+        }
+        if (Math.abs(want - current) >= 0.05) rafId = requestAnimationFrame(tick);
       }
       function scheduleTick() {
         if (!rafId && duration) rafId = requestAnimationFrame(tick);
