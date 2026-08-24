@@ -681,16 +681,21 @@
     });
   }
 
-  /* --- Scroll-driven print film ---
-     A fixed, translucent Bambu Lab printer time-lapse behind all
-     content (genuine in-chamber firmware footage — source: Borillion,
-     bambu-timelapse-dataset, CC BY 4.0; credit also lives in the repo
-     README). The playhead is scrubbed from scroll position (smoothed
-     with a small lerp), so the print visibly continues as the visitor
-     moves down the page. The layer is injected into .voxel-root once
-     React has rendered it; a failed video simply removes itself.
-     Reduced-motion users never reach this code, and CSS hides the
-     layer regardless. */
+  /* --- Scroll-driven print film (frame-sequence engine) ---
+      A fixed, translucent Bambu Lab printer time-lapse behind all
+      content (genuine in-chamber firmware footage — source: Borillion,
+      bambu-timelapse-dataset, CC BY 4.0; credit also lives in the repo
+      README). The footage is pre-extracted into 64 JPEG frames; the
+      scroll position picks a frame and the canvas paints it in a single
+      GPU draw call. Seeking a <video> on every scroll was inherently
+      laggy — mobile browsers serialize and throttle video seeks — while
+      image swaps cannot stutter, on any device. Frames stream in
+      progressively (every 8th first so coarse scrubbing works
+      immediately, the rest right after); until a frame arrives, the
+      nearest loaded one paints instead. Reduced-motion users never
+      reach this code, and CSS hides the layer regardless. */
+  var FILM_FRAMES = 64;
+
   function scanScrollFilm(node) {
     // .voxel-root is often the inserted node ITSELF (React mounts the
     // whole app as one child of #root) — collect() matches it where
@@ -702,24 +707,48 @@
       var wrap = document.createElement("div");
       wrap.className = "voxel-scrollfilm";
       wrap.setAttribute("aria-hidden", "true");
-      var video = document.createElement("video");
-      video.muted = true;
-      video.defaultMuted = true;
-      video.playsInline = true;
-      video.setAttribute("muted", "");
-      video.setAttribute("playsinline", "");
-      video.preload = "auto";
-      // Right-size the film per device: phones decode a light 640px
-      // encode (seeks stay cheap while scrolling), larger screens get
-      // the 1280px one. Brightness is baked into both files, so no
-      // per-frame CSS filter work either.
-      video.src = (window.innerWidth && window.innerWidth < 700)
-        ? "/media/x1c-print-mobile.mp4"
-        : "/media/x1c-print.mp4";
-      wrap.appendChild(video);
+      var canvas = document.createElement("canvas");
+      wrap.appendChild(canvas);
       rootEl.insertBefore(wrap, rootEl.firstChild);
 
-      var duration = 0, current = 0, lastSeeked = -1, rafId = 0;
+      var ctx = canvas.getContext("2d");
+      var frames = new Array(FILM_FRAMES);
+      var current = 0, lastDrawn = -1, rafId = 0;
+      var dpr = Math.min(window.devicePixelRatio || 1, 1.5);
+
+      function resize() {
+        canvas.width = Math.round(window.innerWidth * dpr);
+        canvas.height = Math.round(window.innerHeight * dpr);
+        draw();
+      }
+
+      // Cover-fit (like object-fit: cover) with the same 58% horizontal
+      // crop bias the video had, so the printer stays centered-left.
+      function draw() {
+        if (!ctx) return;
+        var img = nearestLoaded(current);
+        if (!img) return;
+        var cw = canvas.width, ch = canvas.height;
+        if (!cw || !ch) return;
+        var iw = img.naturalWidth, ih = img.naturalHeight;
+        var s = Math.max(cw / iw, ch / ih);
+        var dw = iw * s, dh = ih * s;
+        ctx.clearRect(0, 0, cw, ch);
+        ctx.drawImage(img, (cw - dw) * 0.58, (ch - dh) * 0.5, dw, dh);
+        lastDrawn = current;
+      }
+
+      function nearestLoaded(i) {
+        i = Math.max(0, Math.min(FILM_FRAMES - 1, Math.round(i)));
+        var step = 0;
+        while (step < FILM_FRAMES) {
+          var a = i - step, b = i + step;
+          if (a >= 0 && frames[a] && frames[a].complete && frames[a].naturalWidth) return frames[a];
+          if (b < FILM_FRAMES && frames[b] && frames[b].complete && frames[b].naturalWidth) return frames[b];
+          step++;
+        }
+        return null;
+      }
 
       // Unclamped scroll fraction — scrolling PAST one full page height
       // wraps back around, so an eager scroller simply re-watches the
@@ -729,53 +758,45 @@
         if (max <= 0) return 0;
         var k = window.scrollY / max;
         // iOS rubber-band overscroll reports negative scrollY at the
-        // top (and past-the-end at the bottom); without clamping, the
-        // wrap-around below made the film jump to its final frame.
+        // top; without clamping, the wrap-around below made the film
+        // jump to its final frame.
         if (k <= 0) return 0;
         k = k - Math.floor(k); // past one full page height: wrap and replay
         return k;
       }
+
       function tick() {
         rafId = 0;
-        if (!duration) return;
-        var want = pageProgress() * duration;
+        var want = pageProgress() * (FILM_FRAMES - 1);
         var delta = want - current;
-        // A long fast fling would otherwise chase the target for dozens
-        // of frames (a seek storm); snap most of the distance instantly.
-        if (Math.abs(delta) > duration * 0.2) {
-          current = want;
+        if (Math.abs(delta) > FILM_FRAMES * 0.25) {
+          current = want; // long fling: snap instead of chasing
         } else {
-          current += delta * 0.3; // buttery catch-up toward the scroll target
-          if (Math.abs(want - current) < 0.05) current = want;
+          current += delta * 0.35; // buttery catch-up toward the scroll target
+          if (Math.abs(want - current) < 0.25) current = want;
         }
-        // Never stack seeks: while the decoder is still seeking, skip —
-        // the next frame retries. Queued seeks are exactly what made
-        // fast scrolling stutter.
-        if (!video.seeking && Math.abs(current - lastSeeked) > 0.05) {
-          lastSeeked = current;
-          try { video.currentTime = current; } catch (e) {}
-        }
-        if (Math.abs(want - current) >= 0.05) rafId = requestAnimationFrame(tick);
+        if (Math.round(current) !== Math.round(lastDrawn)) draw();
+        if (Math.abs(want - current) >= 0.25) rafId = requestAnimationFrame(tick);
       }
       function scheduleTick() {
-        if (!rafId && duration) rafId = requestAnimationFrame(tick);
+        if (!rafId) rafId = requestAnimationFrame(tick);
       }
+
+      function pad(n) { return n < 10 ? "0" + n : "" + n; }
+      function load(i) {
+        if (i < 0 || i >= FILM_FRAMES || frames[i]) return;
+        var img = new Image();
+        img.onload = function () { scheduleTick(); }; // newly arrived frame may be the one on screen
+        img.src = "/media/film/f" + pad(i) + ".jpg";
+        frames[i] = img;
+      }
+      var i;
+      for (i = 0; i < FILM_FRAMES; i += 8) load(i); // coarse pass: instant full-range scrubbing
+      for (i = 0; i < FILM_FRAMES; i++) load(i);    // fine pass: fills in everything else
+
       window.addEventListener("scroll", scheduleTick, { passive: true });
-      window.addEventListener("resize", scheduleTick, { passive: true });
-      video.addEventListener("loadedmetadata", function () {
-        duration = video.duration || 0;
-        // iOS Safari ignores preload="auto" and buffers nothing until a
-        // play is requested — so scroll-scrubbing had no frames to seek
-        // to and the film stayed invisible on iPhones. A muted
-        // play()+pause() forces it to fetch the data; the very next
-        // tick re-positions the playhead anyway.
-        var p = video.play();
-        if (p && p.then) p.then(function () { video.pause(); }).catch(function () {});
-        scheduleTick();
-      });
-      video.addEventListener("error", function () {
-        if (wrap.parentNode) wrap.parentNode.removeChild(wrap); // no file — silently no film
-      });
+      window.addEventListener("resize", function () { resize(); scheduleTick(); }, { passive: true });
+      resize();
     });
   }
 

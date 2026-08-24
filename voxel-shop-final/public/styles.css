@@ -655,20 +655,14 @@ footer.liquid-glass {
      whole page while scrolling. */
   transform: translateZ(0);
 }
-.voxel-scrollfilm video {
+.voxel-scrollfilm canvas {
   width: 100%;
   height: 100%;
-  object-fit: cover;
-  /* Higher % = the crop window slides right over the footage, which
-     shifts the printer LEFT on screen (it sits right-of-center in the
-     source video). 58% lands it near the middle on phones. */
-  object-position: 58% 50%;
   display: block;
   /* Essentially opaque (5% transparent) — the film is a real backdrop
-     now, and the difference-blended text feeds off its full colors. */
+     now, and the difference-blended text feeds off its full colors.
+     Cover-fit + crop bias are handled inside the canvas draw code. */
   opacity: 0.95;
-  /* NO CSS filter: brightness is baked into the encoded files, so the
-     GPU has zero per-frame filter work during seeks. */
 }
 /* Film is hidden entirely while the owner dashboard is open. */
 .voxel-film-hidden { display: none; }
