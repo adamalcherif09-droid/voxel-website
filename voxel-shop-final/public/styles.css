@@ -651,6 +651,9 @@ footer.liquid-glass {
   inset: 0;
   z-index: -1;
   pointer-events: none;
+  /* Own compositor layer — the video repaints don't re-composite the
+     whole page while scrolling. */
+  transform: translateZ(0);
 }
 .voxel-scrollfilm video {
   width: 100%;
@@ -664,11 +667,8 @@ footer.liquid-glass {
   /* Essentially opaque (5% transparent) — the film is a real backdrop
      now, and the difference-blended text feeds off its full colors. */
   opacity: 0.95;
-  /* The raw footage is a dark in-chamber shot; a strong brightness
-     lift makes it read light and airy at full opacity. Brightness only
-     — no contrast/saturation games, so colors stay real and there is
-     no visible "filter" cast. */
-  filter: brightness(1.25);
+  /* NO CSS filter: brightness is baked into the encoded files, so the
+     GPU has zero per-frame filter work during seeks. */
 }
 /* Film is hidden entirely while the owner dashboard is open. */
 .voxel-film-hidden { display: none; }

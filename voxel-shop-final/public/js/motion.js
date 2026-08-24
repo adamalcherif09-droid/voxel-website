@@ -709,7 +709,13 @@
       video.setAttribute("muted", "");
       video.setAttribute("playsinline", "");
       video.preload = "auto";
-      video.src = "/media/x1c-print.mp4";
+      // Right-size the film per device: phones decode a light 640px
+      // encode (seeks stay cheap while scrolling), larger screens get
+      // the 1280px one. Brightness is baked into both files, so no
+      // per-frame CSS filter work either.
+      video.src = (window.innerWidth && window.innerWidth < 700)
+        ? "/media/x1c-print-mobile.mp4"
+        : "/media/x1c-print.mp4";
       wrap.appendChild(video);
       rootEl.insertBefore(wrap, rootEl.firstChild);
 
