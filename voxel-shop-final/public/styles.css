@@ -230,19 +230,24 @@ button:active {
 
 /* Page-switch transitions — directional: pushing into a deeper view
    (category/custom-order, which have a Back button) slides in from the
-   right; returning to a view without one (home) slides in from the left. */
+   right; returning to a view without one (home) slides in from the left.
+   fill-mode is `backwards`, NOT `both`: `both` would hold a lingering
+   translate(0) transform on the view forever, and ANY transform creates
+   a stacking context — an invisible isolation box that stops the hero's
+   difference-blended text from seeing the film behind it (text stuck
+   white after visiting a category). */
 .voxel-page-fade {
-  animation: voxelPageFade 0.4s ease both;
+  animation: voxelPageFade 0.4s ease backwards;
 }
 @keyframes voxelPageFade {
   from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: translateY(0); }
 }
 .voxel-page-push {
-  animation: voxelPagePush 0.4s cubic-bezier(.2,.7,.2,1) both;
+  animation: voxelPagePush 0.4s cubic-bezier(.2,.7,.2,1) backwards;
 }
 .voxel-page-pop {
-  animation: voxelPagePop 0.4s cubic-bezier(.2,.7,.2,1) both;
+  animation: voxelPagePop 0.4s cubic-bezier(.2,.7,.2,1) backwards;
 }
 @keyframes voxelPagePush {
   from { opacity: 0; transform: translateX(24px); }
@@ -659,10 +664,11 @@ footer.liquid-glass {
   /* Essentially opaque (5% transparent) — the film is a real backdrop
      now, and the difference-blended text feeds off its full colors. */
   opacity: 0.95;
-  /* The raw footage is a dark in-chamber shot; lifted brightness makes
-     it read natural at full opacity instead of murky. No saturation or
-     contrast games — colors stay real. */
-  filter: brightness(1.5) contrast(0.98);
+  /* The raw footage is a dark in-chamber shot; a strong brightness
+     lift makes it read light and airy at full opacity. Brightness only
+     — no contrast/saturation games, so colors stay real and there is
+     no visible "filter" cast. */
+  filter: brightness(1.55);
 }
 /* Film is hidden entirely while the owner dashboard is open. */
 .voxel-film-hidden { display: none; }
