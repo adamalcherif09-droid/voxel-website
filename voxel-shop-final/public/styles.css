@@ -668,7 +668,7 @@ footer.liquid-glass {
      lift makes it read light and airy at full opacity. Brightness only
      — no contrast/saturation games, so colors stay real and there is
      no visible "filter" cast. */
-  filter: brightness(1.55);
+  filter: brightness(1.25);
 }
 /* Film is hidden entirely while the owner dashboard is open. */
 .voxel-film-hidden { display: none; }
