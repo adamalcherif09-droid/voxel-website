@@ -270,38 +270,45 @@
     var tiltPref = "";
     try { tiltPref = window.sessionStorage.getItem("voxel-tilt") || ""; } catch (e) { tiltPref = ""; }
 
+    var autoHide = null; // pill auto-hide timer (must be declared — strict mode)
+
     retagTiltPill = function () {
-      // Home page only: the pill belongs to the shop's front door, not
-      // to category/admin views. Leaving home dismisses it; coming
-      // back offers it again (until enabled or denied for the session).
-      if (!document.querySelector(".cat-shelf")) {
-        var stale = document.querySelector(".voxel-tilt-permission");
-        if (stale) { clearTimeout(autoHide); stale.remove(); }
-        return;
+      try {
+        // Home page only: the pill belongs to the shop's front door, not
+        // to category/admin views. Leaving home dismisses it; coming
+        // back offers it again (until enabled or denied for the session).
+        if (!document.querySelector(".cat-shelf")) {
+          var stale = document.querySelector(".voxel-tilt-permission");
+          if (stale) { clearTimeout(autoHide); stale.remove(); }
+          return;
+        }
+        if (tiltPref) return;
+        if (document.querySelector(".voxel-tilt-permission")) return;
+        var btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "voxel-tilt-permission";
+        btn.setAttribute("aria-label", "Enable tilt effect");
+        btn.textContent = "Enable tilt effect";
+        autoHide = setTimeout(function () { btn.remove(); }, 12000);
+        btn.addEventListener("click", function () {
+          clearTimeout(autoHide);
+          DeviceOrientationEvent.requestPermission().then(function (state) {
+            if (state === "granted") {
+              tiltPref = "granted";
+              try { window.sessionStorage.setItem("voxel-tilt", "granted"); } catch (e) {}
+              start();
+            } else {
+              tiltPref = "denied";
+              try { window.sessionStorage.setItem("voxel-tilt", "denied"); } catch (e) {}
+            }
+            btn.remove();
+          }).catch(function () { btn.remove(); });
+        });
+        document.body.appendChild(btn);
+      } catch (e) {
+        // Never let a pill problem break the rest of the motion system.
+        console && console.warn && console.warn("tilt pill skipped:", e);
       }
-      if (tiltPref) return;
-      if (document.querySelector(".voxel-tilt-permission")) return;
-      var btn = document.createElement("button");
-      btn.type = "button";
-      btn.className = "voxel-tilt-permission";
-      btn.setAttribute("aria-label", "Enable tilt effect");
-      btn.textContent = "Enable tilt effect";
-      autoHide = setTimeout(function () { btn.remove(); }, 12000);
-      btn.addEventListener("click", function () {
-        clearTimeout(autoHide);
-        DeviceOrientationEvent.requestPermission().then(function (state) {
-          if (state === "granted") {
-            tiltPref = "granted";
-            try { window.sessionStorage.setItem("voxel-tilt", "granted"); } catch (e) {}
-            start();
-          } else {
-            tiltPref = "denied";
-            try { window.sessionStorage.setItem("voxel-tilt", "denied"); } catch (e) {}
-          }
-          btn.remove();
-        }).catch(function () { btn.remove(); });
-      });
-      document.body.appendChild(btn);
     };
     retagTiltPill();
   }
