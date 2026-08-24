@@ -193,11 +193,11 @@ function CategoryView(props) {
 
   return (
     <div className="max-w-6xl mx-auto px-5 sm:px-8 py-10">
-      <button onClick={props.goBack} className="flex items-center gap-1.5 text-sm mb-6 bg-transparent border-0 cursor-pointer" style={{ color: "var(--ink-dim)" }}>
+      <button onClick={props.goBack} className="voxel-on-film flex items-center gap-1.5 text-sm mb-6 bg-transparent border-0 cursor-pointer" style={{ color: "var(--ink-dim)" }}>
         <ChevronLeft size={16} /> Back
       </button>
       <Eyebrow>Category</Eyebrow>
-      <h2 className="font-display text-2xl sm:text-3xl mb-8" style={{ color: "var(--ink)" }}>{category.name}</h2>
+      <h2 className="voxel-on-film font-display text-2xl sm:text-3xl mb-8" style={{ color: "var(--ink)" }}>{category.name}</h2>
       {items.length === 0 ? (
         <EmptyState icon={Package} title={content.emptyCategoryTitle} body={content.emptyCategoryBody} />
       ) : (
@@ -248,11 +248,11 @@ function CustomOrderView(props) {
 
   return (
     <div className="max-w-2xl mx-auto px-5 sm:px-8 py-10">
-      <button onClick={props.goBack} className="flex items-center gap-1.5 text-sm mb-6 bg-transparent border-0 cursor-pointer" style={{ color: "var(--ink-dim)" }}>
+      <button onClick={props.goBack} className="voxel-on-film flex items-center gap-1.5 text-sm mb-6 bg-transparent border-0 cursor-pointer" style={{ color: "var(--ink-dim)" }}>
         <ChevronLeft size={16} /> Back
       </button>
       <Eyebrow>Custom order</Eyebrow>
-      <h2 className="font-display text-2xl" style={{ color: "var(--ink)" }}>{content.customPageHeading}</h2>
+      <h2 className="voxel-on-film font-display text-2xl" style={{ color: "var(--ink)" }}>{content.customPageHeading}</h2>
       <p className="text-sm mt-2 max-w-md" style={{ color: "var(--ink-dim)" }}>{content.customPageSubtext}</p>
       {hasContact && (
         <p className="text-xs mt-2 font-mono-ac" style={{ color: "var(--ink-dim)" }}>

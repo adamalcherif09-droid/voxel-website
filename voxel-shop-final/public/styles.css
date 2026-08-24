@@ -656,7 +656,9 @@ footer.liquid-glass {
      source video). 58% lands it near the middle on phones. */
   object-position: 58% 50%;
   display: block;
-  opacity: 0.33;
+  /* Essentially opaque (5% transparent) — the film is a real backdrop
+     now, and the difference-blended text feeds off its full colors. */
+  opacity: 0.95;
   /* Heavy contrast: the footage swings between near-black and near-
      white, which is what gives the difference-blended hero text its
      extreme, crisp per-pixel color flips. */
@@ -664,23 +666,6 @@ footer.liquid-glass {
 }
 /* Film is hidden entirely while the owner dashboard is open. */
 .voxel-film-hidden { display: none; }
-/* Readability veil: a canvas-colored wash over the film, strongest at
-   the top (hero headline) and bottom (footer links) where text sits
-   directly on the page, lightest in the middle where cards and panels
-   already cover the film themselves. */
-.voxel-scrollfilm::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(
-    180deg,
-    rgba(213, 196, 186, 0.55) 0%,
-    rgba(213, 196, 186, 0.18) 38%,
-    rgba(213, 196, 186, 0.18) 62%,
-    rgba(213, 196, 186, 0.5) 100%
-  );
-  pointer-events: none;
-}
 /* Hero text: PER-PIXEL adaptive color. difference() blending inverts
    each glyph pixel against whatever is literally behind it — dark
    background -> light glyph, light background -> dark glyph, even
@@ -696,6 +681,22 @@ footer.liquid-glass {
   .voxel-hero .voxel-eyebrow,
   .voxel-hero h1,
   .voxel-hero .voxel-fade {
+    color: #fff !important;
+    mix-blend-mode: difference !important;
+  }
+}
+/* The same adaptive treatment for the small section labels ("Featured",
+   "Categories", ...) and any page heading that sits directly on the
+   film — with the video now near-opaque, fixed dark ink would vanish
+   over its dark passages. */
+.voxel-eyebrow,
+.voxel-on-film {
+  color: #000 !important;
+  text-shadow: none !important;
+}
+@supports (mix-blend-mode: difference) {
+  .voxel-eyebrow,
+  .voxel-on-film {
     color: #fff !important;
     mix-blend-mode: difference !important;
   }
