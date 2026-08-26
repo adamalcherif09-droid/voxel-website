@@ -854,7 +854,31 @@
     if (!(node instanceof HTMLElement)) return false;
     var cs = window.getComputedStyle(node);
     if (cs.position !== "fixed") return false;
+    // Backdrop layers like the scroll film are fixed + inset-0 too, but
+    // they can't receive pointer events — a drag handle on one would be
+    // unclickable decoration painted over the page. Real modals accept
+    // clicks, so this cleanly separates the two.
+    if (cs.pointerEvents === "none") return false;
     return parseFloat(cs.top) === 0 && parseFloat(cs.left) === 0 && parseFloat(cs.right) === 0 && parseFloat(cs.bottom) === 0;
+  }
+
+  // Classifies `node` itself — or any modal overlays nested inside it.
+  // The nested scan matters: React's initial mount arrives as one big
+  // .voxel-root insertion, so a deep-link popup present at first paint
+  // is a descendant, never the added node itself.
+  function classifyOverlays(node) {
+    if (!node || !node.querySelectorAll) return;
+    if (isModalOverlay(node)) {
+      node.classList.add("voxel-modal-overlay");
+      initModalDrag(node);
+      return;
+    }
+    Array.prototype.forEach.call(node.querySelectorAll("div"), function (el) {
+      if (isModalOverlay(el)) {
+        el.classList.add("voxel-modal-overlay");
+        initModalDrag(el);
+      }
+    });
   }
 
   function initRootWatcher() {
@@ -867,6 +891,11 @@
     splitHeroWords(root.querySelector("h1.voxel-reveal"));
     scanMotionGraphics(root);
 
+    // If React mounted before this script ran (warm cache, fast device),
+    // a deep-link popup can already be in the DOM — the observer below
+    // only sees insertions from now on, so classify existing modals too.
+    classifyOverlays(root);
+
     var mo = new MutationObserver(function (mutations) {
       mutations.forEach(function (m) {
         m.addedNodes.forEach(function (node) {
@@ -874,10 +903,7 @@
 
           initHeaderGlass();
 
-          if (isModalOverlay(node)) {
-            node.classList.add("voxel-modal-overlay");
-            initModalDrag(node);
-          }
+          classifyOverlays(node);
 
           var newH1 = node.matches && node.matches("h1.voxel-reveal")
             ? node

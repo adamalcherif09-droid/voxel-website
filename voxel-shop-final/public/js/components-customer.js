@@ -113,11 +113,14 @@ function RecentPrintsWall(props) {
   var prints = props.prints;
   // The track animates translateX(0 -> -50%) over two identical halves,
   // so the loop only looks seamless when one half is at least as wide
-  // as the screen — short lists get repeated until they fill it.
+  // as the screen — short lists get repeated until they fill it. The
+  // 30-item ceiling bounds that duplication only; every uploaded photo
+  // always plays at least once per cycle.
   var repeats = Math.max(1, Math.ceil(10 / Math.max(1, prints.length)));
+  while (repeats > 1 && prints.length * repeats > 30) repeats--;
   var half = [];
-  for (var r = 0; r < repeats && half.length < 30; r++) {
-    for (var i = 0; i < prints.length && half.length < 30; i++) half.push(prints[i]);
+  for (var r = 0; r < repeats; r++) {
+    for (var i = 0; i < prints.length; i++) half.push(prints[i]);
   }
   // Seconds-per-photo keeps the perceived speed constant no matter how
   // many photos are on the wall (owner-adjustable from the dashboard).
