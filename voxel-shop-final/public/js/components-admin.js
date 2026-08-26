@@ -638,6 +638,24 @@ function AdminCatalog(props) {
   );
 }
 
+// Module-level so its identity is stable across renders — inputs keep
+// focus while typing. Reads/writes the shared content draft via props.
+function ContentField(props) {
+  var draft = props.draft;
+  var set = props.set;
+  var field = props.field;
+  return (
+    <label className="flex flex-col gap-1.5 text-sm" style={{ color: "var(--ink)" }}>
+      {props.label}
+      {props.area ? (
+        <textarea value={draft[field]} onChange={function (e) { set(field, e.target.value); }} rows={2} placeholder={props.placeholder} className="px-3 py-2 rounded-md text-sm resize-none" style={{ background: "var(--panel)", border: "1px solid var(--line)", color: "var(--ink)" }} />
+      ) : (
+        <input value={draft[field]} onChange={function (e) { set(field, e.target.value); }} placeholder={props.placeholder} className="px-3 py-2 rounded-md text-sm" style={{ background: "var(--panel)", border: "1px solid var(--line)", color: "var(--ink)" }} />
+      )}
+    </label>
+  );
+}
+
 function AdminContent(props) {
   var content = props.content;
   var _draft = React.useState(content); var draft = _draft[0]; var setDraft = _draft[1];
@@ -662,21 +680,9 @@ function AdminContent(props) {
     setTimeout(function () { setSavedMsg(""); }, 3000);
   }
 
-  var inputStyle = { background: "var(--panel)", border: "1px solid var(--line)", color: "var(--ink)" };
-  function Field(fieldProps) {
-    var label = fieldProps.label, field = fieldProps.field, area = fieldProps.area, placeholder = fieldProps.placeholder;
-    return (
-      <label className="flex flex-col gap-1.5 text-sm" style={{ color: "var(--ink)" }}>
-        {label}
-        {area ? (
-          <textarea value={draft[field]} onChange={function (e) { set(field, e.target.value); }} rows={2} placeholder={placeholder} className="px-3 py-2 rounded-md text-sm resize-none" style={inputStyle} />
-        ) : (
-          <input value={draft[field]} onChange={function (e) { set(field, e.target.value); }} placeholder={placeholder} className="px-3 py-2 rounded-md text-sm" style={inputStyle} />
-        )}
-      </label>
-    );
-  }
-
+  // Field is defined OUTSIDE AdminContent on purpose: a component
+  // recreated inside render gets a new identity every keystroke, React
+  // remounts every input, and typing loses focus after one character.
   return (
     <div className="flex flex-col gap-10 max-w-2xl">
       <p className="text-sm" style={{ color: "var(--ink-dim)" }}>
@@ -686,8 +692,8 @@ function AdminContent(props) {
       <section>
         <h3 className="font-display text-lg mb-4" style={{ color: "var(--ink)" }}>Identity</h3>
         <div className="flex flex-col gap-4">
-          <Field label="Business name" field="businessName" />
-          <Field label="Currency symbol" field="currencySymbol" />
+          <ContentField draft={draft} set={set} label="Business name" field="businessName" />
+          <ContentField draft={draft} set={set} label="Currency symbol" field="currencySymbol" />
           <label className="flex flex-col gap-1.5 text-sm" style={{ color: "var(--ink)" }}>
             Logo (replaces the default mark next to your name)
             <input type="file" accept="image/*" onChange={handleLogo} className="text-sm" style={{ color: "var(--ink-dim)" }} />
@@ -708,8 +714,8 @@ function AdminContent(props) {
           When someone taps "Order now", they will be able to message you directly on whichever of these you fill in.
         </p>
         <div className="flex flex-col gap-4">
-          <Field label="WhatsApp number (digits only, with country code — e.g. 9613123456, no plus or spaces)" field="whatsappNumber" placeholder="9613123456" />
-          <Field label="Instagram username (no @)" field="instagramHandle" placeholder="yourbusiness" />
+          <ContentField draft={draft} set={set} label="WhatsApp number (digits only, with country code — e.g. 9613123456, no plus or spaces)" field="whatsappNumber" placeholder="9613123456" />
+          <ContentField draft={draft} set={set} label="Instagram username (no @)" field="instagramHandle" placeholder="yourbusiness" />
         </div>
       </section>
 
@@ -719,59 +725,91 @@ function AdminContent(props) {
           Fill in any of these and a link appears in the footer — tapping it opens that app directly (or its website if the app isn't installed). Your WhatsApp number and Instagram username above are reused here too, so you don't need to enter those twice.
         </p>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Field label="TikTok username (no @)" field="tiktokHandle" placeholder="yourbusiness" />
-          <Field label="Facebook username or page name" field="facebookHandle" placeholder="yourbusiness" />
+          <ContentField draft={draft} set={set} label="TikTok username (no @)" field="tiktokHandle" placeholder="yourbusiness" />
+          <ContentField draft={draft} set={set} label="Facebook username or page name" field="facebookHandle" placeholder="yourbusiness" />
         </div>
       </section>
 
       <section>
         <h3 className="font-display text-lg mb-4" style={{ color: "var(--ink)" }}>Contact information (shown on the site)</h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Field label="Phone" field="contactPhone" placeholder="+961 ..." />
-          <Field label="Email" field="contactEmail" placeholder="you@example.com" />
+          <ContentField draft={draft} set={set} label="Phone" field="contactPhone" placeholder="+961 ..." />
+          <ContentField draft={draft} set={set} label="Email" field="contactEmail" placeholder="you@example.com" />
         </div>
       </section>
 
       <section>
         <h3 className="font-display text-lg mb-4" style={{ color: "var(--ink)" }}>Home page</h3>
         <div className="flex flex-col gap-4">
-          <Field label="Eyebrow (small line above the headline, after your business name)" field="heroEyebrow" />
-          <Field label="Headline — line 1" field="heroHeadlineLine1" />
-          <Field label="Headline — line 2" field="heroHeadlineLine2" />
-          <Field label="Subtext" field="heroSubtext" area />
-          <Field label="Featured section label" field="featuredEyebrow" />
-          <Field label="Categories section label" field="categoriesEyebrow" />
+          <ContentField draft={draft} set={set} label="Eyebrow (small line above the headline, after your business name)" field="heroEyebrow" />
+          <ContentField draft={draft} set={set} label="Headline — line 1" field="heroHeadlineLine1" />
+          <ContentField draft={draft} set={set} label="Headline — line 2" field="heroHeadlineLine2" />
+          <ContentField draft={draft} set={set} label="Subtext" field="heroSubtext" area />
+          <ContentField draft={draft} set={set} label="Featured section label" field="featuredEyebrow" />
+          <ContentField draft={draft} set={set} label="Categories section label" field="categoriesEyebrow" />
         </div>
       </section>
 
       <section>
         <h3 className="font-display text-lg mb-4" style={{ color: "var(--ink)" }}>Custom-order card (on the home page)</h3>
         <div className="flex flex-col gap-4">
-          <Field label="Heading" field="customCtaHeading" />
-          <Field label="Body" field="customCtaBody" area />
-          <Field label="Button text" field="customCtaButton" />
+          <ContentField draft={draft} set={set} label="Heading" field="customCtaHeading" />
+          <ContentField draft={draft} set={set} label="Body" field="customCtaBody" area />
+          <ContentField draft={draft} set={set} label="Button text" field="customCtaButton" />
         </div>
       </section>
 
       <section>
         <h3 className="font-display text-lg mb-4" style={{ color: "var(--ink)" }}>Custom order page</h3>
         <div className="flex flex-col gap-4">
-          <Field label="Heading" field="customPageHeading" />
-          <Field label="Subtext" field="customPageSubtext" area />
+          <ContentField draft={draft} set={set} label="Heading" field="customPageHeading" />
+          <ContentField draft={draft} set={set} label="Subtext" field="customPageSubtext" area />
         </div>
+      </section>
+
+      <section>
+        <h3 className="font-display text-lg mb-4" style={{ color: "var(--ink)" }}>How ordering works (under the hero)</h3>
+        <label className="flex items-center gap-2 text-sm cursor-pointer mb-3" style={{ color: "var(--ink)" }}>
+          <input type="checkbox" checked={!!draft.showHowItWorks} onChange={function (e) { set("showHowItWorks", e.target.checked); }} />
+          Show the three-step strip on the home page
+        </label>
+        <div className="flex flex-col gap-4">
+          <ContentField draft={draft} set={set} label="Section label" field="howItWorksEyebrow" />
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <ContentField draft={draft} set={set} label="Step 1 — title" field="howItWorksStep1Title" />
+            <ContentField draft={draft} set={set} label="Step 2 — title" field="howItWorksStep2Title" />
+            <ContentField draft={draft} set={set} label="Step 3 — title" field="howItWorksStep3Title" />
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <ContentField draft={draft} set={set} label="Step 1 — description" field="howItWorksStep1Body" area />
+            <ContentField draft={draft} set={set} label="Step 2 — description" field="howItWorksStep2Body" area />
+            <ContentField draft={draft} set={set} label="Step 3 — description" field="howItWorksStep3Body" area />
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <h3 className="font-display text-lg mb-4" style={{ color: "var(--ink)" }}>Catalog badges</h3>
+        <label className="flex items-center gap-2 text-sm cursor-pointer mb-3" style={{ color: "var(--ink)" }}>
+          <input type="checkbox" checked={!!draft.showNewBadge} onChange={function (e) { set("showNewBadge", e.target.checked); }} />
+          Mark recently added designs with a brass NEW badge
+        </label>
+        {draft.showNewBadge !== false && (
+          <ContentField draft={draft} set={set} label="Keep showing NEW for this many days after a design is added" field="newBadgeDays" />
+        )}
       </section>
 
       <section>
         <h3 className="font-display text-lg mb-4" style={{ color: "var(--ink)" }}>Empty category message</h3>
         <div className="flex flex-col gap-4">
-          <Field label="Title" field="emptyCategoryTitle" />
-          <Field label="Body" field="emptyCategoryBody" area />
+          <ContentField draft={draft} set={set} label="Title" field="emptyCategoryTitle" />
+          <ContentField draft={draft} set={set} label="Body" field="emptyCategoryBody" area />
         </div>
       </section>
 
       <section>
         <h3 className="font-display text-lg mb-4" style={{ color: "var(--ink)" }}>Footer</h3>
-        <Field label="Tagline (shown right after your business name)" field="footerTagline" />
+        <ContentField draft={draft} set={set} label="Tagline (shown right after your business name)" field="footerTagline" />
       </section>
 
       <section>
@@ -780,7 +818,164 @@ function AdminContent(props) {
           <input type="checkbox" checked={draft.showLbpConversion} onChange={function (e) { set("showLbpConversion", e.target.checked); }} />
           Also show prices converted to Lebanese Lira
         </label>
-        {draft.showLbpConversion && <Field label="Exchange rate (LBP per $1)" field="lbpExchangeRate" />}
+        {draft.showLbpConversion && <ContentField draft={draft} set={set} label="Exchange rate (LBP per $1)" field="lbpExchangeRate" />}
+      </section>
+
+      {savedMsg && <p className="text-sm" style={{ color: "var(--teal)" }}>{savedMsg}</p>}
+      <PrimaryButton onClick={handleSave}>Save and publish</PrimaryButton>
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------
+   Prints wall manager — photos of completed orders that scroll
+   across the home page. Nothing appears on the public site until
+   at least one photo is saved here, so an empty shop shows no
+   empty section.
+--------------------------------------------------------- */
+function AdminPrintsWall(props) {
+  var content = props.content;
+  var _draft = React.useState(content); var draft = _draft[0]; var setDraft = _draft[1];
+  var _uploadingCount = React.useState(0); var uploadingCount = _uploadingCount[0]; var setUploadingCount = _uploadingCount[1];
+  var _savedMsg = React.useState(""); var savedMsg = _savedMsg[0]; var setSavedMsg = _savedMsg[1];
+  var prints = draft.recentPrints || [];
+
+  function set(field, value) { setDraft(function (d) { var next = Object.assign({}, d); next[field] = value; return next; }); }
+  function patchPrint(id, patch) {
+    setDraft(function (d) {
+      var next = Object.assign({}, d);
+      next.recentPrints = (d.recentPrints || []).map(function (p) { return p.id === id ? Object.assign({}, p, patch) : p; });
+      return next;
+    });
+  }
+  function movePrint(id, dir) {
+    setDraft(function (d) {
+      var list = (d.recentPrints || []).slice();
+      var i = list.findIndex(function (p) { return p.id === id; });
+      var j = i + dir;
+      if (i === -1 || j < 0 || j >= list.length) return d;
+      var tmp = list[i]; list[i] = list[j]; list[j] = tmp;
+      var next = Object.assign({}, d);
+      next.recentPrints = list;
+      return next;
+    });
+  }
+  function removePrint(id) {
+    setDraft(function (d) {
+      var next = Object.assign({}, d);
+      next.recentPrints = (d.recentPrints || []).filter(function (p) { return p.id !== id; });
+      return next;
+    });
+  }
+
+  // Photos are compressed one at a time (same pipeline as catalog
+  // photos) — a whole batch at once would spike memory on phones.
+  function handleFiles(e) {
+    var input = e.target;
+    var files = Array.prototype.slice.call((input && input.files) || []);
+    input.value = "";
+    if (!files.length) return;
+    var room = RECENT_PRINTS_MAX - prints.length;
+    if (room <= 0) {
+      alert("The prints wall holds up to " + RECENT_PRINTS_MAX + " photos — remove one first.");
+      return;
+    }
+    var accepted = files.slice(0, room);
+    if (accepted.length < files.length) {
+      alert("Only the first " + accepted.length + " photo" + (accepted.length === 1 ? " was" : "s were") + " added — the wall holds up to " + RECENT_PRINTS_MAX + ".");
+    }
+    setUploadingCount(accepted.length);
+    function processNext() {
+      if (!accepted.length) {
+        setUploadingCount(0);
+        return;
+      }
+      var f = accepted.shift();
+      compressImage(f).then(function (dataUrl) {
+        setDraft(function (d) {
+          return Object.assign({}, d, { recentPrints: (d.recentPrints || []).concat([{ id: makeId("print"), image: dataUrl, caption: "" }]) });
+        });
+        processNext();
+      }).catch(function () { processNext(); });
+    }
+    processNext();
+  }
+
+  function handleSave() {
+    // Drop anything without a photo and normalize the numbers before
+    // the content document is written for every visitor.
+    var cleaned = prints
+      .filter(function (p) { return p && p.image; })
+      .slice(0, RECENT_PRINTS_MAX)
+      .map(function (p) { return { id: p.id, image: p.image, caption: (p.caption || "").trim() }; });
+    var next = Object.assign({}, draft, {
+      recentPrints: cleaned,
+      recentPrintsSpeed: String(Math.min(15, Math.max(1, Number(draft.recentPrintsSpeed) || 2.6))),
+    });
+    props.updateContent(next);
+    setSavedMsg("Saved — the home page is updated for every visitor.");
+    setTimeout(function () { setSavedMsg(""); }, 3000);
+  }
+
+  return (
+    <div className="flex flex-col gap-10 max-w-2xl">
+      <p className="text-sm" style={{ color: "var(--ink-dim)" }}>
+        Real photos of finished orders, scrolling across the home page. Proof of work converts better than anything decorative — the wall only appears once the first photo is saved below.
+      </p>
+
+      <section>
+        <h3 className="font-display text-lg mb-4" style={{ color: "var(--ink)" }}>Display</h3>
+        <div className="flex flex-col gap-4">
+          <label className="flex items-center gap-2 text-sm cursor-pointer" style={{ color: "var(--ink)" }}>
+            <input type="checkbox" checked={!!draft.showRecentPrints} onChange={function (e) { set("showRecentPrints", e.target.checked); }} />
+            Show the prints wall on the home page
+          </label>
+          <ContentField draft={draft} set={set} label="Section label" field="recentPrintsEyebrow" />
+          <ContentField draft={draft} set={set} label="Scroll pace — seconds each photo takes to pass (bigger = slower)" field="recentPrintsSpeed" />
+        </div>
+      </section>
+
+      <section>
+        <h3 className="font-display text-lg mb-4" style={{ color: "var(--ink)" }}>Photos</h3>
+        <label className="flex flex-col gap-1.5 text-sm" style={{ color: "var(--ink)" }}>
+          Add photos (you can pick several at once)
+          <input type="file" accept="image/*" multiple onChange={handleFiles} className="text-sm" style={{ color: "var(--ink-dim)" }} />
+          <span className="text-xs" style={{ color: "var(--ink-dim)" }}>
+            Up to {RECENT_PRINTS_MAX} photos, compressed automatically like catalog photos. Captions are optional — one short line works best ("Dragon helmet, printed in silk bronze").
+          </span>
+        </label>
+        {uploadingCount > 0 && <span className="text-xs mt-2" style={{ color: "var(--ink-dim)" }}>Preparing {uploadingCount} photo{uploadingCount === 1 ? "" : "s"}…</span>}
+
+        {prints.length === 0 ? (
+          <div className="mt-4">
+            <EmptyState icon={ImageIcon} title="No photos yet" body="Upload your first completed print above — the wall appears on the home page as soon as this is saved." />
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
+            {prints.map(function (p, i) {
+              return (
+                <div key={p.id} className="p-3 rounded-md flex gap-3" style={{ background: "var(--panel)", border: "1px solid var(--line)" }}>
+                  <img src={p.image} alt="" style={{ width: 72, height: 72, objectFit: "cover", borderRadius: 8, flexShrink: 0 }} />
+                  <div className="flex flex-col gap-2 flex-1" style={{ minWidth: 0 }}>
+                    <input
+                      value={p.caption || ""}
+                      onChange={function (e) { patchPrint(p.id, { caption: e.target.value }); }}
+                      placeholder="Caption (optional)"
+                      className="px-3 py-2 rounded-md text-sm w-full"
+                      style={{ background: "var(--panel-2)", border: "1px solid var(--line)", color: "var(--ink)" }}
+                    />
+                    <div className="flex items-center gap-1">
+                      <button onClick={function () { movePrint(p.id, -1); }} disabled={i === 0} aria-label="Move earlier" className="cursor-pointer border-0 bg-transparent" style={{ color: i === 0 ? "var(--line)" : "var(--ink-dim)" }}><ChevronUp size={15} /></button>
+                      <button onClick={function () { movePrint(p.id, 1); }} disabled={i === prints.length - 1} aria-label="Move later" className="cursor-pointer border-0 bg-transparent" style={{ color: i === prints.length - 1 ? "var(--line)" : "var(--ink-dim)" }}><ChevronDown size={15} /></button>
+                      <span className="text-xs font-mono-ac" style={{ color: "var(--ink-dim)", marginLeft: 4 }}>{i + 1}</span>
+                      <button onClick={function () { removePrint(p.id); }} aria-label="Remove photo" className="cursor-pointer border-0 bg-transparent" style={{ color: "var(--danger)", marginLeft: "auto" }}><Trash2 size={15} /></button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </section>
 
       {savedMsg && <p className="text-sm" style={{ color: "var(--teal)" }}>{savedMsg}</p>}
@@ -1023,6 +1218,7 @@ function AdminView(props) {
   var tabs = [
     { id: "orders", label: "Inquiries", icon: ClipboardList },
     { id: "catalog", label: "Catalog", icon: Layers },
+    { id: "prints", label: "Prints wall", icon: ImageIcon },
     { id: "content", label: "Content", icon: TypeIcon },
     { id: "settings", label: "Settings", icon: SettingsIcon },
   ];
@@ -1054,6 +1250,7 @@ function AdminView(props) {
           addModel={props.addModel} updateModel={props.updateModel} deleteModel={props.deleteModel} toggleFeatured={props.toggleFeatured} importModels={props.importModels} content={content} settings={props.settings} />
       )}
       {props.tab === "content" && <AdminContent content={content} updateContent={props.updateContent} />}
+      {props.tab === "prints" && <AdminPrintsWall content={props.content} updateContent={props.updateContent} />}
       {props.tab === "settings" && <AdminSettings settings={props.settings} updateSettings={props.updateSettings} />}
     </div>
   );

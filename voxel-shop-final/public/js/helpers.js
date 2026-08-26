@@ -29,6 +29,20 @@ var DEFAULT_CONTENT = {
   emptyCategoryBody: "This category does not have any prints listed yet. Check back soon.",
   showLbpConversion: true,
   lbpExchangeRate: "89500",
+  showHowItWorks: true,
+  howItWorksEyebrow: "How ordering works",
+  howItWorksStep1Title: "Pick a design",
+  howItWorksStep1Body: "Browse the catalog or send us your own file.",
+  howItWorksStep2Title: "Message us",
+  howItWorksStep2Body: "Tap Order now — we take it from there on WhatsApp or Instagram.",
+  howItWorksStep3Title: "Printed & ready",
+  howItWorksStep3Body: "Most orders are finished and handed over within a few days.",
+  showNewBadge: true,
+  newBadgeDays: "14",
+  showRecentPrints: true,
+  recentPrintsEyebrow: "Recent prints",
+  recentPrintsSpeed: "2.6",
+  recentPrints: [],
 };
 
 var DEFAULT_CATEGORIES = [
@@ -50,6 +64,20 @@ var DEFAULT_CATEGORIES = [
 // there's nothing for the admin dashboard to manage for it.
 var ALL_DESIGNS_CATEGORY_ID = "__all__";
 var ALL_DESIGNS_CATEGORY = { id: ALL_DESIGNS_CATEGORY_ID, name: "All Designs" };
+
+// The prints wall stores compressed photos as text inside the content
+// document — same trade-off as catalog photos. Capped so a save can't
+// quietly outgrow what the server accepts in one request.
+var RECENT_PRINTS_MAX = 40;
+
+// A model counts as NEW when it was added to the catalog within the
+// owner-configurable window (Content tab), 14 days by default.
+function isNewModel(model, days) {
+  if (!model || !model.createdAt) return false;
+  var windowDays = Number(days);
+  if (!windowDays || windowDays < 0) windowDays = 14;
+  return Date.now() - model.createdAt < windowDays * 24 * 60 * 60 * 1000;
+}
 
 var ALLOWED_FILE_EXTENSIONS = [".stl", ".3mf", ".step", ".stp", ".obj"];
 

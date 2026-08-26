@@ -11,6 +11,8 @@ Shop site: catalog of ready-to-print designs + custom print orders, with an owne
 
 ## Media credits
 
-- `public/media/x1c-print.mp4` — Bambu Lab printer time-lapse by **Borillion**, from the
+- `public/media/film/f00–f63.jpg` — frames extracted from a Bambu Lab printer time-lapse by
+  **Borillion**, from the
   [bambu-timelapse-dataset](https://huggingface.co/datasets/v2thegreat/bambu-timelapse-dataset),
-  licensed **CC BY 4.0**. Recompressed for web.
+  licensed **CC BY 4.0**. Recompressed for web (the original mp4 was replaced by these
+  frames so scrolling can scrub the print without video-seek lag).

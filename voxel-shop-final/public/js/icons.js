@@ -78,6 +78,22 @@ function ChevronLeft(props) {
   );
 }
 
+function ChevronUp(props) {
+  return (
+    <IconBase {...props}>
+      <polyline points="6,15 12,9 18,15" />
+    </IconBase>
+  );
+}
+
+function ChevronDown(props) {
+  return (
+    <IconBase {...props}>
+      <polyline points="6,9 12,15 18,9" />
+    </IconBase>
+  );
+}
+
 function Plus(props) {
   return (
     <IconBase {...props}>

@@ -71,18 +71,20 @@ function Footer(props) {
 function ModelCard(props) {
   var model = props.model;
   var content = props.content;
+  var isNew = content.showNewBadge !== false && isNewModel(model, content.newBadgeDays);
   return (
     <div
       onClick={props.onView}
       className={"voxel-tilt rounded-lg overflow-hidden flex flex-col cursor-pointer"}
       style={{ background: "var(--panel)", border: props.highlight ? "1px solid var(--brass)" : "1px solid var(--line)" }}
     >
-      <div className="flex items-center justify-center" style={{ background: "var(--panel-2)", minHeight: model.image ? undefined : 140 }}>
+      <div className="flex items-center justify-center" style={{ background: "var(--panel-2)", minHeight: model.image ? undefined : 140, position: "relative" }}>
         {model.image ? (
           <img src={model.image} alt={model.name} style={{ width: "100%", height: "auto", display: "block" }} />
         ) : (
           <ImageIcon size={26} style={{ color: "var(--ink-dim)" }} />
         )}
+        {isNew && <span className="voxel-new-badge voxel-new-badge--absolute font-mono-ac">New</span>}
       </div>
       <div className="p-3 sm:p-4 flex flex-col flex-1">
         <div className="flex items-start justify-between gap-2">
@@ -106,11 +108,67 @@ function ModelCard(props) {
   );
 }
 
+function RecentPrintsWall(props) {
+  var content = props.content;
+  var prints = props.prints;
+  // The track animates translateX(0 -> -50%) over two identical halves,
+  // so the loop only looks seamless when one half is at least as wide
+  // as the screen — short lists get repeated until they fill it.
+  var repeats = Math.max(1, Math.ceil(10 / Math.max(1, prints.length)));
+  var half = [];
+  for (var r = 0; r < repeats && half.length < 30; r++) {
+    for (var i = 0; i < prints.length && half.length < 30; i++) half.push(prints[i]);
+  }
+  // Seconds-per-photo keeps the perceived speed constant no matter how
+  // many photos are on the wall (owner-adjustable from the dashboard).
+  var paceSeconds = Math.min(15, Math.max(1, Number(content.recentPrintsSpeed) || 2.6));
+  var duration = Math.round(half.length * paceSeconds);
+  var track = half.concat(half);
+  return (
+    <section className="pb-14">
+      <Eyebrow>{content.recentPrintsEyebrow}</Eyebrow>
+      <div className="voxel-marquee">
+        <div className="voxel-marquee-track" style={{ animationDuration: duration + "s" }}>
+          {track.map(function (p, i) {
+            return (
+              <figure key={p.id + "-" + i} className="voxel-marquee-item">
+                <img src={p.image} alt={p.caption || "Recent print"} />
+                {p.caption ? <figcaption>{p.caption}</figcaption> : null}
+              </figure>
+            );
+          })}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function HowItWorksStrip(props) {
+  var content = props.content;
+  return (
+    <section className="pb-14">
+      <Eyebrow>{content.howItWorksEyebrow}</Eyebrow>
+      <div className="voxel-how-grid">
+        {[1, 2, 3].map(function (n) {
+          return (
+            <div key={n} className="glass-accent cat-tile-accent p-5 text-left">
+              <div className="font-mono-ac text-xs" style={{ color: "var(--brass-text)" }}>{"0" + n}</div>
+              <div className="font-display text-base mt-2" style={{ color: "var(--ink)" }}>{content["howItWorksStep" + n + "Title"]}</div>
+              <p className="text-xs mt-1" style={{ color: "var(--ink-dim)" }}>{content["howItWorksStep" + n + "Body"]}</p>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
 function HomeView(props) {
   var content = props.content;
   var categories = props.categories;
   var models = props.models;
   var featured = models.filter(function (m) { return m.featured; });
+  var recentPrints = content.recentPrints || [];
 
   return (
     <div className="max-w-6xl mx-auto px-5 sm:px-8">
@@ -124,6 +182,8 @@ function HomeView(props) {
           {content.heroSubtext}
         </p>
       </section>
+
+      {content.showHowItWorks !== false && <HowItWorksStrip content={content} />}
 
       {featured.length > 0 && (
         <section className="pb-14">
@@ -168,6 +228,10 @@ function HomeView(props) {
         </div>
       </section>
 
+      {content.showRecentPrints !== false && recentPrints.length > 0 && (
+        <RecentPrintsWall content={content} prints={recentPrints} />
+      )}
+
       <section className="pb-16">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-5 p-6 sm:p-8 rounded-lg" style={{ border: "1px dashed var(--brass)", background: "rgba(230, 219, 211, 0.62)" }}>
           <div>
@@ -185,11 +249,22 @@ function CategoryView(props) {
   var content = props.content;
   var category = props.category;
   var models = props.models;
+  var _query = React.useState(""); var query = _query[0]; var setQuery = _query[1];
+  // Fresh category, fresh search — otherwise switching categories could
+  // silently keep filtering by the previous one's search text.
+  React.useEffect(function () { setQuery(""); }, [category.id]);
+  var q = query.trim().toLowerCase();
   // The virtual "All Designs" category shows every model, regardless
   // of which real category it's actually filed under.
   var items = category.id === ALL_DESIGNS_CATEGORY_ID
     ? models
     : models.filter(function (m) { return m.categoryId === category.id; });
+  var visibleItems = q
+    ? items.filter(function (m) {
+        return (m.name || "").toLowerCase().indexOf(q) !== -1 ||
+          (m.description || "").toLowerCase().indexOf(q) !== -1;
+      })
+    : items;
 
   return (
     <div className="max-w-6xl mx-auto px-5 sm:px-8 py-10">
@@ -197,12 +272,30 @@ function CategoryView(props) {
         <ChevronLeft size={16} /> Back
       </button>
       <Eyebrow>Category</Eyebrow>
-      <h2 className="voxel-on-film font-display text-2xl sm:text-3xl mb-8" style={{ color: "var(--ink)" }}>{category.name}</h2>
+      <h2 className="voxel-on-film font-display text-2xl sm:text-3xl mb-4" style={{ color: "var(--ink)" }}>{category.name}</h2>
+      {items.length >= 4 && (
+        <div className="mb-6">
+          <input
+            value={query}
+            onChange={function (e) { setQuery(e.target.value); }}
+            placeholder={"Search " + category.name + "…"}
+            className="w-full px-3.5 py-2.5 rounded-md text-sm"
+            style={{ background: "var(--panel)", border: "1px solid var(--line)", color: "var(--ink)" }}
+          />
+          {q && (
+            <div className="text-xs mt-2 font-mono-ac" style={{ color: "var(--ink-dim)" }}>
+              {visibleItems.length + " " + (visibleItems.length === 1 ? "match" : "matches")}
+            </div>
+          )}
+        </div>
+      )}
       {items.length === 0 ? (
         <EmptyState icon={Package} title={content.emptyCategoryTitle} body={content.emptyCategoryBody} />
+      ) : visibleItems.length === 0 ? (
+        <EmptyState icon={Package} title="No designs match your search" body={"Nothing here matches \"" + query.trim() + "\" — try a shorter word."} />
       ) : (
         <div className="voxel-masonry">
-          {items.map(function (m) {
+          {visibleItems.map(function (m) {
             return (
               <div key={m.id} className="voxel-masonry-item">
                 <ModelCard model={m} content={content} onOrder={function () { props.onOrderModel(m); }} onView={function () { props.onViewModel(m); }} />
@@ -315,6 +408,11 @@ function ModelDetailPopup(props) {
           </button>
         </div>
         <div className="p-5 flex flex-col gap-3" style={{ overflowY: "auto" }}>
+          {content.showNewBadge !== false && isNewModel(model, content.newBadgeDays) && (
+            <div>
+              <span className="voxel-new-badge font-mono-ac">New</span>
+            </div>
+          )}
           <div className="flex items-start justify-between gap-3">
             <div className="font-display text-lg" style={{ color: "var(--ink)" }}>{model.name}</div>
             {model.featured && <Star size={17} fill="var(--brass-text)" style={{ color: "var(--brass-text)" }} />}
@@ -345,7 +443,9 @@ function OrderContactPopup(props) {
   var message = isCustom
     ? "Hi! I have a custom design I would like printed." + (item.fileName ? " File: " + item.fileName + "." : "") + (item.note ? " " + item.note : "")
     : "Hi! I would like to order: " + item.name + (modelLink ? " — " + modelLink : "");
-  var waUrl = buildWhatsAppUrl(content.whatsappNumber, message);
+  // Same fallback the footer uses: if no dedicated WhatsApp number is
+  // set, the general contact phone number becomes the WhatsApp chat.
+  var waUrl = buildWhatsAppUrl(content.whatsappNumber || content.contactPhone, message);
   var igUrl = buildInstagramDmUrl(content.instagramHandle);
   var hasAny = waUrl || igUrl;
 

@@ -103,6 +103,91 @@ body {
   .voxel-masonry-item { margin-bottom: 16px; }
 }
 
+/* ============ HOW ORDERING WORKS STRIP ============ */
+
+.voxel-how-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 14px;
+}
+@media (min-width: 640px) {
+  .voxel-how-grid { grid-template-columns: repeat(3, 1fr); gap: 16px; }
+}
+
+/* ============ NEW BADGE ============ */
+
+.voxel-new-badge {
+  display: inline-block;
+  background: var(--brass);
+  color: #fff;
+  font-size: 10px;
+  line-height: 1;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  padding: 4px 9px;
+  border-radius: 999px;
+  box-shadow: 0 2px 6px rgba(22,22,24,0.18);
+}
+.voxel-new-badge--absolute {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 2;
+}
+
+/* ============ RECENT PRINTS WALL (marquee) ============ */
+/* Photos drift right-to-left forever. The track holds two identical
+   halves and animates translateX(0 -> -50%), so the loop point is
+   invisible as long as one half is wider than the screen — HomeView
+   repeats short lists until that's true. Side mask fades the edges
+   so cards never pop in/out on a hard border. */
+.voxel-marquee {
+  overflow: hidden;
+  border-radius: 16px;
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 5%, #000 95%, transparent);
+  mask-image: linear-gradient(to right, transparent, #000 5%, #000 95%, transparent);
+}
+.voxel-marquee-track {
+  display: flex;
+  width: max-content;
+  animation: voxelMarqueeScroll linear infinite;
+}
+.voxel-marquee:hover .voxel-marquee-track { animation-play-state: paused; }
+.voxel-marquee-item {
+  position: relative;
+  flex-shrink: 0;
+  width: 230px;
+  height: 172px;
+  margin-right: 14px;
+  border-radius: 14px;
+  overflow: hidden;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+}
+.voxel-marquee-item img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.voxel-marquee-item figcaption {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 24px 12px 9px;
+  color: #fff;
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  background: linear-gradient(to top, rgba(22,22,24,0.78), rgba(22,22,24,0));
+}
+@keyframes voxelMarqueeScroll {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+
 /* ============ MOTION SYSTEM (Stage 1) ============ */
 
 /* Header glass-on-scroll — materializes like iOS: the opaque bar
@@ -842,6 +927,14 @@ button, a {
   .voxel-pop { animation: none !important; }
   .voxel-check { display: none !important; }
   .voxel-scrollfilm { display: none !important; }
+
+  /* Prints wall: no auto-scroll — the row becomes swipeable instead. */
+  .voxel-marquee-track { animation: none !important; }
+  .voxel-marquee {
+    overflow-x: auto;
+    -webkit-mask-image: none;
+    mask-image: none;
+  }
 }
 
 @media (prefers-reduced-transparency: reduce) {
