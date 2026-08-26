@@ -781,9 +781,9 @@ function AdminContent(props) {
             <ContentField draft={draft} set={set} label="Step 3 — title" field="howItWorksStep3Title" />
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <ContentField draft={draft} set={set} label="Step 1 — description" field="howItWorksStep1Body" area />
-            <ContentField draft={draft} set={set} label="Step 2 — description" field="howItWorksStep2Body" area />
-            <ContentField draft={draft} set={set} label="Step 3 — description" field="howItWorksStep3Body" area />
+            <ContentField draft={draft} set={set} label="Step 1 — description (hover text)" field="howItWorksStep1Body" area />
+            <ContentField draft={draft} set={set} label="Step 2 — description (hover text)" field="howItWorksStep2Body" area />
+            <ContentField draft={draft} set={set} label="Step 3 — description (hover text)" field="howItWorksStep3Body" area />
           </div>
         </div>
       </section>

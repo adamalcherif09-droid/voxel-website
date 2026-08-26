@@ -104,14 +104,58 @@ body {
 }
 
 /* ============ HOW ORDERING WORKS STRIP ============ */
-
-.voxel-how-grid {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 14px;
+/* One slim, clearly non-clickable bar — deliberately NOT glass tiles,
+   which visitors mistake for category cards. */
+.voxel-how-strip {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  padding: 11px 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
 }
-@media (min-width: 640px) {
-  .voxel-how-grid { grid-template-columns: repeat(3, 1fr); gap: 16px; }
+.voxel-how-label {
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--teal);
+  flex-shrink: 0;
+}
+.voxel-how-steps {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+}
+.voxel-how-entry { display: inline-flex; align-items: center; gap: 14px; }
+.voxel-how-step { display: inline-flex; align-items: center; gap: 7px; }
+.voxel-how-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 17px;
+  height: 17px;
+  border-radius: 50%;
+  background: var(--brass-soft);
+  border: 1px solid var(--brass);
+  color: var(--brass-text);
+  font-size: 9px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.voxel-how-title {
+  font-size: 0.88rem;
+  font-weight: 500;
+  color: var(--ink);
+  white-space: nowrap;
+}
+.voxel-how-arrow {
+  color: var(--ink-dim);
+  opacity: 0.65;
+  font-size: 12px;
+  line-height: 1;
 }
 
 /* ============ NEW BADGE ============ */

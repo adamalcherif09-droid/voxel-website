@@ -145,19 +145,26 @@ function RecentPrintsWall(props) {
 
 function HowItWorksStrip(props) {
   var content = props.content;
+  // Deliberately one slim, non-interactive bar — three big tiles read
+  // as clickable category cards, which they aren't. Step descriptions
+  // ride along as native hover tooltips instead of taking up space.
   return (
-    <section className="pb-14">
-      <Eyebrow>{content.howItWorksEyebrow}</Eyebrow>
-      <div className="voxel-how-grid">
-        {[1, 2, 3].map(function (n) {
-          return (
-            <div key={n} className="glass-accent cat-tile-accent p-5 text-left">
-              <div className="font-mono-ac text-xs" style={{ color: "var(--brass-text)" }}>{"0" + n}</div>
-              <div className="font-display text-base mt-2" style={{ color: "var(--ink)" }}>{content["howItWorksStep" + n + "Title"]}</div>
-              <p className="text-xs mt-1" style={{ color: "var(--ink-dim)" }}>{content["howItWorksStep" + n + "Body"]}</p>
-            </div>
-          );
-        })}
+    <section className="pb-10">
+      <div className="voxel-how-strip">
+        <span className="voxel-how-label font-mono-ac">{content.howItWorksEyebrow}</span>
+        <span className="voxel-how-steps">
+          {[1, 2, 3].map(function (n, i) {
+            return (
+              <span key={n} className="voxel-how-entry">
+                {i > 0 && <span className="voxel-how-arrow" aria-hidden="true">→</span>}
+                <span className="voxel-how-step" title={content["howItWorksStep" + n + "Body"] || undefined}>
+                  <span className="voxel-how-num font-mono-ac">{n}</span>
+                  <span className="voxel-how-title">{content["howItWorksStep" + n + "Title"]}</span>
+                </span>
+              </span>
+            );
+          })}
+        </span>
       </div>
     </section>
   );
