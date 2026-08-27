@@ -719,6 +719,10 @@
       function resize() {
         canvas.width = Math.round(window.innerWidth * dpr);
         canvas.height = Math.round(window.innerHeight * dpr);
+        // Frames are cover-scaled up to 4x on hi-dpi screens; the canvas
+        // default ("low") smoothing turns that upscale into chunky pixels.
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = "high";
         draw();
       }
 
@@ -787,7 +791,11 @@
         if (i < 0 || i >= FILM_FRAMES || frames[i]) return;
         var img = new Image();
         img.onload = function () { scheduleTick(); }; // newly arrived frame may be the one on screen
-        img.src = "/media/film/f" + pad(i) + ".jpg";
+        // The frame files are f01.jpg .. f64.jpg; index 0 maps to f01,
+        // index 63 to f64 — the frames were named starting at f01, so
+        // loading "f" + i would have burned index 0 on a 404 and never
+        // shown the final frame.
+        img.src = "/media/film/f" + pad(i + 1) + ".jpg";
         frames[i] = img;
       }
       var i;
