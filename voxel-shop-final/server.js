@@ -65,20 +65,80 @@ app.use((req, res, next) => {
    - Inquiries get their own PUBLIC append-only endpoint — customers
      must be able to log an order attempt without any password.
 --------------------------------------------------------- */
-const STORAGE_KEYS = ["voxel-catalog", "voxel-inquiries", "voxel-settings", "voxel-content"];
+const SESSION_KEY = "voxel-sessions";
+const STORAGE_KEYS = ["voxel-catalog", "voxel-inquiries", "voxel-settings", "voxel-content", SESSION_KEY];
 const ADMIN_SESSION_TTL = 24 * 60 * 60 * 1000; // 24 hours
-const adminSessions = new Map(); // token -> expiresAt
+const adminSessions = new Map(); // tokenHash -> expiresAt (cache of the persisted session map)
+let sessionChain = Promise.resolve(); // serializes session map writes so two logins can't clobber each other
+
+function hashToken(token) {
+  return crypto.createHash("sha256").update(token).digest("hex");
+}
+
+// Admin sessions are persisted in the same shared store that holds the
+// catalog — keyed by a SHA-256 hash of the token, never the raw token.
+// Sessions used to live in memory only, which meant that ANY server
+// restart (a redeploy, Render recycling the free instance, opening a
+// second instance) silently logged the owner out mid-edit: the next save
+// returned 401 and the dashboard claimed "Saving failed" even though the
+// change (e.g. deleting a category) was perfectly valid. Persisting them
+// makes edits survive deploys; the 24-hour TTL keeps the list tiny.
+let sessionsLoaded = false;
+
+async function loadSessions() {
+  try {
+    const raw = await storageGet(SESSION_KEY);
+    let map = null;
+    if (raw) { try { map = JSON.parse(raw); } catch (e) { map = null; } }
+    if (!map || typeof map !== "object" || Array.isArray(map)) map = {};
+    const now = Date.now();
+    for (const [hash, exp] of Object.entries(map)) {
+      if (typeof exp !== "number" || exp <= now) delete map[hash];
+    }
+    adminSessions.clear();
+    for (const [hash, exp] of Object.entries(map)) adminSessions.set(hash, exp);
+    sessionsLoaded = true;
+    if (Object.keys(map).length === 0) await persistSessions();
+  } catch (e) {
+    console.error("session load failed:", e);
+    adminSessions.clear();
+    sessionsLoaded = true;
+  }
+}
+
+async function persistSessions() {
+  const snap = {};
+  const now = Date.now();
+  for (const [hash, exp] of adminSessions) {
+    if (exp > now) snap[hash] = exp;
+    else adminSessions.delete(hash);
+  }
+  const op = sessionChain.then(function () { return storageSet(SESSION_KEY, JSON.stringify(snap)); });
+  sessionChain = op.catch(function () { /* keep the chain alive after failures */ });
+  return op;
+}
 
 function isAuthedAdmin(req) {
   const token = req.headers["x-voxel-token"];
   if (!token || typeof token !== "string") return false;
-  const expiresAt = adminSessions.get(token);
+  const expiresAt = adminSessions.get(hashToken(token));
   if (!expiresAt || expiresAt < Date.now()) {
-    adminSessions.delete(token);
+    adminSessions.delete(hashToken(token));
     return false;
   }
   return true;
 }
+
+// Prune expired sessions in the background so the persisted map never
+// grows (the 24h TTL + hourly sweep keep it to a handful of entries).
+setInterval(function sweepSessions() {
+  const now = Date.now();
+  let changed = false;
+  for (const [hash, exp] of adminSessions) {
+    if (exp <= now) { adminSessions.delete(hash); changed = true; }
+  }
+  if (changed) persistSessions().catch(function () {});
+}, 60 * 60 * 1000).unref();
 
 /* ---------------------------------------------------------
    Rate limiting — tiny in-memory buckets, per endpoint per IP.
@@ -296,8 +356,9 @@ app.get("/api/storage/:key", async (req, res) => {
       return;
     }
     // Customer inquiries are private (names, phone numbers, order
-    // notes) — only the signed-in owner may read them.
-    if (key === "voxel-inquiries" && !isAuthedAdmin(req)) {
+    // notes) and the admin session map is a bearer-credential list —
+    // only the signed-in owner may read either.
+    if ((key === "voxel-inquiries" || key === "voxel-sessions") && !isAuthedAdmin(req)) {
       res.status(401).json({ error: "unauthorized_read" });
       return;
     }
@@ -332,6 +393,12 @@ app.post("/api/storage/:key", async (req, res) => {
     const key = req.params.key;
     if (!STORAGE_KEYS.includes(key)) {
       res.status(404).json({ error: "unknown_key" });
+      return;
+    }
+    if (key === "voxel-sessions") {
+      // The server owns the session map (see the note beside
+      // adminSessions) — clients must never write it.
+      res.status(403).json({ error: "server_managed_key" });
       return;
     }
     const value = req.body && typeof req.body.value === "string" ? req.body.value : null;
@@ -436,8 +503,10 @@ app.post("/api/auth", rateLimit("auth", 8, 15 * 60 * 1000), async (req, res) => 
       return;
     }
     const token = crypto.randomUUID();
-    adminSessions.set(token, Date.now() + ADMIN_SESSION_TTL);
-    setTimeout(() => adminSessions.delete(token), ADMIN_SESSION_TTL).unref();
+    const expiresAt = Date.now() + ADMIN_SESSION_TTL;
+    const tokenHash = hashToken(token);
+    adminSessions.set(tokenHash, expiresAt);
+    await persistSessions(); // persisted -> the session survives server restarts
     res.json({ token: token });
   } catch (e) {
     console.error("auth failed:", e);
@@ -734,6 +803,10 @@ async function start() {
   }
 
   await seedMissingKeys();
+
+  // Warm the admin session cache from the persisted map so sessions
+  // granted before a restart/redeploy keep working (see note above).
+  await loadSessions();
 
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`Voxel is running on port ${PORT}`);
