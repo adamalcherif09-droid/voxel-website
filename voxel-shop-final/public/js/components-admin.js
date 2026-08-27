@@ -63,6 +63,11 @@ function AdminGate(props) {
 
   return (
     <div className="max-w-sm mx-auto px-5 py-24 text-center">
+      {props.notice && (
+        <p className="mb-5 text-sm rounded-md px-3 py-2" style={{ background: "var(--panel-2)", border: "1px solid var(--line)", color: "var(--ink)" }}>
+          Your dashboard session expired, so that change wasn't saved. Enter the door again and it will be applied automatically.
+        </p>
+      )}
       <Lock size={26} style={{ color: "var(--ink-dim)" }} className="mx-auto" />
 
       {stage === "combo" && (

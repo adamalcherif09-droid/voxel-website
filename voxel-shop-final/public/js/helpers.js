@@ -263,9 +263,12 @@ function storageGet(key) {
     .catch(function () { return { ok: false, value: null }; });
 }
 
-// Returns true when the server confirmed the write. `opts.admin` marks
-// owner-dashboard writes, which carry the session token and are
-// rejected by the server without one.
+// Returns { ok: true } when the server confirmed the write, otherwise
+// { ok: false, status } — `status` lets the dashboard tell a dead admin
+// session (401) apart from a transient server/network problem and react
+// accordingly (re-gate and auto-retry the change vs. retry once and warn).
+// `opts.admin` marks owner-dashboard writes, which carry the session token
+// and are rejected by the server without one.
 function storageSet(key, value, opts) {
   var headers = { "Content-Type": "application/json" };
   var token = getAdminApiToken();
@@ -275,8 +278,8 @@ function storageSet(key, value, opts) {
     headers: headers,
     body: JSON.stringify({ value: JSON.stringify(value) }),
   })
-    .then(function (res) { return res.ok; })
-    .catch(function () { return false; });
+    .then(function (res) { return { ok: res.ok, status: res.status }; })
+    .catch(function () { return { ok: false, status: 0 }; });
 }
 
 // Appends one inquiry through the public append-only endpoint. The

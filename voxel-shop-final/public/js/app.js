@@ -78,25 +78,51 @@ function App() {
     });
   }, []);
 
+  var _reauthHint = React.useState(false); var reauthHint = _reauthHint[0]; var setReauthHint = _reauthHint[1];
+  var pendingWriteRef = React.useRef(null);
+
   // Owner-dashboard saves are loud: if the server doesn't confirm the
   // write, say so immediately instead of letting changes silently
   // vanish on the next refresh.
-  function guardedSave(key, value) {
-    return storageSet(key, value, { admin: true }).then(function (ok) {
-      if (!ok) alert("Saving failed — your change was NOT saved.\n\nCheck your internet connection and try again. If you were logged out of the dashboard, redo the footer entry and apply the change again.");
-      return ok;
+  function guardedSave(key, value, _retried) {
+    return storageSet(key, value, { admin: true }).then(function (out) {
+      if (out.ok) return true;
+      if (out.status === 401) {
+        // The admin session is dead — this page's token was issued
+        // before the last server restart/redeploy. Stash the change and
+        // put the owner back at the door; re-entering the gate issues a
+        // fresh token and the save is then re-applied automatically (see
+        // handleGateSuccess), so the edit is never lost and never has to
+        // be redone by hand.
+        pendingWriteRef.current = { key: key, value: value };
+        setReauthHint(true);
+        setIsAdmin(false);
+        setView("admin-gate");
+        return false;
+      }
+      if (!_retried && out.status >= 500) {
+        // Transient server hiccup (database blip etc.) — one automatic
+        // retry before bothering the owner. Never retries 401/400/413.
+        return new Promise(function (resolve) {
+          setTimeout(function () { resolve(guardedSave(key, value, true)); }, 900);
+        });
+      }
+      alert("Saving failed — your change was NOT saved (server response " + (out.status || "network error") + ").\n\nCheck your internet connection and try again. If you were logged out of the dashboard, redo the footer entry and apply the change again.");
+      return false;
     });
   }
 
   function persistCatalog(updater) {
-    var resolved;
-    setCatalog(function (prev) {
-      resolved = typeof updater === "function" ? updater(prev.categories, prev.models) : updater;
-      return resolved;
-    });
-    // setCatalog's updater above runs synchronously in React's batching,
-    // so `resolved` is already set by the time we get here.
-    return guardedSave("voxel-catalog", resolved);
+    // Compute the next catalog synchronously from the state we have right
+    // now, then save THAT object. React 18 does not guarantee that a
+    // function updater passed to setCatalog has been executed by the time
+    // the following line runs (updaters are applied during the scheduled
+    // render, not during setState), so capturing the value inside the
+    // updater could leave `next` undefined and POST `{value: undefined}`
+    // -> the server replies 400 missing_value and the change is lost.
+    var next = typeof updater === "function" ? updater(catalog.categories, catalog.models) : updater;
+    setCatalog(next);
+    return guardedSave("voxel-catalog", next);
   }
   function persistSettings(updaterOrValue) {
     var resolved;
@@ -188,12 +214,21 @@ function App() {
   function handleGateSuccess() {
     setIsAdmin(true);
     setView("admin");
+    setReauthHint(false);
     // The inquiry list is owner-private: pull it now, with the admin
     // session token the gate just obtained. Best-effort — the dashboard
     // shows an empty state if it can't be read.
     apiGetInquiries().then(function (result) {
       if (result.ok && Array.isArray(result.value)) setInquiries(result.value);
     });
+    // A save that failed earlier because the session had died is retried
+    // automatically with the brand-new token, so the owner doesn't have
+    // to remember and redo the change they already made.
+    if (pendingWriteRef.current) {
+      var pending = pendingWriteRef.current;
+      pendingWriteRef.current = null;
+      guardedSave(pending.key, pending.value);
+    }
   }
 
   if (loadError) {
@@ -224,7 +259,7 @@ function App() {
         {view === "home" && <HomeView content={content} categories={categories} models={models} goCategory={goCategory} goCustom={goCustom} onOrderModel={openCatalogOrder} onViewModel={setViewingModel} />}
         {view === "category" && activeCategory && <CategoryView content={content} category={activeCategory} models={models} goBack={goHome} onOrderModel={openCatalogOrder} onViewModel={setViewingModel} />}
         {view === "custom" && <CustomOrderView content={content} goBack={goHome} onOrderNow={handleCustomOrderNow} />}
-        {view === "admin-gate" && <AdminGate security={settings.security || DEFAULT_SECURITY} onSuccess={handleGateSuccess} />}
+        {view === "admin-gate" && <AdminGate security={settings.security || DEFAULT_SECURITY} notice={reauthHint} onSuccess={handleGateSuccess} />}
         {view === "admin" && isAdmin && (
           <AdminView tab={adminTab} setTab={setAdminTab} inquiries={inquiries}
             categories={categories} models={models} addCategory={addCategory} renameCategory={renameCategory} deleteCategory={deleteCategory}
