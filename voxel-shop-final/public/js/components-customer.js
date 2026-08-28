@@ -42,7 +42,7 @@ function Footer(props) {
   // phone's dialer — that's how customers actually want to reach out.
   // Prefers the dedicated WhatsApp number if it's set, otherwise falls
   // back to the general contact phone number.
-  var whatsappDisplayNumber = content.contactPhone || content.whatsappNumber;
+  var whatsappDisplayNumber = content.whatsappNumber || content.contactPhone;
   var whatsappFooterUrl = buildWhatsAppUrl(content.whatsappNumber || content.contactPhone, "Hi! I have a question.");
   var instagramUrl = buildInstagramDmUrl(content.instagramHandle);
   var tiktokUrl = buildTiktokUrl(content.tiktokHandle);
@@ -359,7 +359,7 @@ function CustomOrderView(props) {
       <p className="text-sm mt-2 max-w-md" style={{ color: "var(--ink-dim)" }}>{content.customPageSubtext}</p>
       {hasContact && (
         <p className="text-xs mt-2 font-mono-ac" style={{ color: "var(--ink-dim)" }}>
-          Or reach us directly — {content.contactEmail && (buildMailtoUrl(content.contactEmail) ? <a href={buildMailtoUrl(content.contactEmail)} style={{ color: "inherit" }}>{content.contactEmail}</a> : content.contactEmail)}{content.contactEmail && (content.contactPhone || content.whatsappNumber) ? " · " : ""}{(content.contactPhone || content.whatsappNumber) && (buildWhatsAppUrl(content.whatsappNumber || content.contactPhone, "Hi! I have a question.") ? <a href={buildWhatsAppUrl(content.whatsappNumber || content.contactPhone, "Hi! I have a question.")} target="_blank" rel="noopener noreferrer" style={{ color: "inherit" }}>{content.contactPhone || content.whatsappNumber}</a> : (content.contactPhone || content.whatsappNumber))}
+          Or reach us directly — {content.contactEmail && (buildMailtoUrl(content.contactEmail) ? <a href={buildMailtoUrl(content.contactEmail)} style={{ color: "inherit" }}>{content.contactEmail}</a> : content.contactEmail)}{content.contactEmail && (content.whatsappNumber || content.contactPhone) ? " · " : ""}{(content.whatsappNumber || content.contactPhone) && (buildWhatsAppUrl(content.whatsappNumber || content.contactPhone, "Hi! I have a question.") ? <a href={buildWhatsAppUrl(content.whatsappNumber || content.contactPhone, "Hi! I have a question.")} target="_blank" rel="noopener noreferrer" style={{ color: "inherit" }}>{content.whatsappNumber || content.contactPhone}</a> : (content.whatsappNumber || content.contactPhone))}
         </p>
       )}
 

@@ -795,9 +795,12 @@ function AdminContent(props) {
   }
 
   function handleSave() {
-    props.updateContent(draft);
-    setSavedMsg("Saved — your site is updated for every visitor.");
-    setTimeout(function () { setSavedMsg(""); }, 3000);
+    props.updateContent(draft).then(function (ok) {
+      if (ok) {
+        setSavedMsg("Saved — your site is updated for every visitor.");
+        setTimeout(function () { setSavedMsg(""); }, 3000);
+      }
+    });
   }
 
   // Field is defined OUTSIDE AdminContent on purpose: a component
@@ -1032,9 +1035,12 @@ function AdminPrintsWall(props) {
       recentPrints: cleaned,
       recentPrintsSpeed: String(Math.min(15, Math.max(1, Number(draft.recentPrintsSpeed) || 2.6))),
     });
-    props.updateContent(next);
-    setSavedMsg("Saved — the home page is updated for every visitor.");
-    setTimeout(function () { setSavedMsg(""); }, 3000);
+    props.updateContent(next).then(function (ok) {
+      if (ok) {
+        setSavedMsg("Saved — the home page is updated for every visitor.");
+        setTimeout(function () { setSavedMsg(""); }, 3000);
+      }
+    });
   }
 
   return (
@@ -1201,6 +1207,7 @@ function AdminSettings(props) {
       // so the server preserves it unless this flag is set.
       next._updateWebhook = true;
       next.webhookUrl = value;
+      next._webhookSet = !removing;
       return next;
     }).then(function (ok) {
       if (ok) {

@@ -132,7 +132,15 @@ function App() {
     // the updater can POST {value: undefined} -> the server replies 400
     // missing_value and the save silently fails with "Saving failed".
     var resolved = typeof updaterOrValue === "function" ? updaterOrValue(settings) : updaterOrValue;
-    setSettings(resolved);
+    var clean = Object.assign({}, resolved);
+    if (clean.security && typeof clean.security === "object") {
+      clean.security = Object.assign({}, clean.security);
+      delete clean.security._updatePasscode;
+      delete clean.security.passcodeNew;
+    }
+    delete clean._updateWebhook;
+    delete clean.webhookUrl;
+    setSettings(clean);
     return guardedSave("voxel-settings", resolved);
   }
   function persistContent(next) {
