@@ -43,6 +43,69 @@ app.use((req, res, next) => {
   res.setHeader("X-Content-Type-Options", "nosniff");
   res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
   res.setHeader("X-Frame-Options", "DENY");
+  // HSTS only when the request actually arrived over TLS (Render
+  // terminates TLS and forwards https requests with the proto header;
+  // plain local http stays unstoppable). Browsers ignore HSTS over
+  // insecure transports anyway, but sending it only on https keeps the
+  // intent unambiguous.
+  if (req.secure || req.get("x-forwarded-proto") === "https") {
+    res.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
+  }
+  // The site never asks for device/permission capabilities — forbid
+  // them outright so a compromised script has nothing to bargain with.
+  res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=(), usb=(), browsing-topics=()");
+  next();
+});
+
+/* ---------------------------------------------------------
+   Host / Origin allowlist.
+   Every request's Host header must be one of the site's real
+   hostnames. This kills DNS-rebinding (an attacker's domain
+   pointed at this server can no longer stand in for it) and
+   Host-header poisoning, and the Origin check on any request
+   that can change state kills cross-site request forgery even
+   before the admin token check runs. The allowed set:
+   - localhost / 127.0.0.1 (local testing)
+   - any *.onrender.com host (Render's free platform domain —
+     covers the live app and its health checks)
+   - anything listed in APP_URL or ALLOWED_HOSTS (a custom
+     domain the owner brings, e.g. voxel.example.com)
+-------------------------------------------------------- */
+function normalizeHostHeader(raw) {
+  var host = String(raw || "").toLowerCase().trim();
+  // strip scheme if someone sneaks one in, then the port
+  host = host.replace(/^https?:\/\//, "").split("/")[0];
+  // strip port (handles "[::1]:3000" too)
+  host = host.replace(/^\[([^\]]+)\](?::\d+)?$/, "$1").replace(/:\d+$/, "");
+  return host;
+}
+function hostAllowed(host) {
+  if (!host) return false;
+  if (host === "localhost" || host === "127.0.0.1" || host === "::1") return true;
+  if (host.indexOf(".onrender.com") === host.length - ".onrender.com".length) return true;
+  var extra = (process.env.ALLOWED_HOSTS || "").split(",")
+    .map(function (s) { return normalizeHostHeader(s); })
+    .filter(Boolean);
+  var appUrl = normalizeHostHeader(process.env.APP_URL || "");
+  if (appUrl && appUrl === host) return true;
+  return extra.indexOf(host) !== -1;
+}
+app.use(function (req, res, next) {
+  const host = normalizeHostHeader(req.get("host"));
+  if (!hostAllowed(host)) {
+    res.status(403).json({ error: "host_not_allowed" });
+    return;
+  }
+  if (req.method !== "GET" && req.method !== "HEAD") {
+    const origin = req.get("origin");
+    if (origin) {
+      const ohost = normalizeHostHeader(origin);
+      if (!hostAllowed(ohost)) {
+        res.status(403).json({ error: "origin_not_allowed" });
+        return;
+      }
+    }
+  }
   next();
 });
 
@@ -153,10 +216,22 @@ setInterval(function sweepBuckets() {
   for (const [k, b] of rateBuckets) if (b.resetAt < now) rateBuckets.delete(k);
 }, 10 * 60 * 1000).unref();
 
+// The client's real IP, defensively derived. The old code trusted the
+// FRONT of X-Forwarded-For, which any caller can set — one line lets
+// an attacker mint a fresh rate-limit bucket per attempt and brute
+// force the passcode forever. Express's req.ip already obeys "trust
+// proxy 1"; when no proxy is in front it equals the TCP peer, which a
+// remote caller cannot forge (an X-Forwarded-For header is ignored).
+// Two layers then protect against a lying X-Forwarded-For on hosts
+// that forward it before Express sees it (see authLockInfo below).
+function clientIp(req) {
+  const viaExpress = req.ip || req.socket.remoteAddress || "unknown";
+  return String(viaExpress).replace(/^::ffff:/, "");
+}
+
 function rateLimit(name, max, windowMs) {
   return function (req, res, next) {
-    const fwd = (req.headers["x-forwarded-for"] || "").split(",")[0].trim();
-    const ip = fwd || req.ip || "unknown";
+    const ip = clientIp(req);
     const k = name + ":" + ip;
     const now = Date.now();
     let b = rateBuckets.get(k);
@@ -171,6 +246,81 @@ function rateLimit(name, max, windowMs) {
     }
     next();
   };
+}
+
+// A per-route GLOBAL burst cap that is keyed on nothing a caller can
+// choose — used where an attacker spraying many fake IPs could
+// otherwise reset the per-IP buckets and pump a public endpoint.
+function globalBurst(name, max, windowMs) {
+  const k = "__global__:" + name;
+  const now = Date.now();
+  let b = rateBuckets.get(k);
+  if (!b || b.resetAt < now) {
+    b = { count: 0, resetAt: now + windowMs };
+    rateBuckets.set(k, b);
+  }
+  b.count++;
+  return b.count <= max;
+}
+
+/* ---------------------------------------------------------
+   Passcode brute-force lockout. Beyond the per-IP request
+   limiter above, failures are counted with NO attacker-choosable
+   key: a global window and a per-IP consecutive-failure counter
+   (IP still fingerprintable). A spray of thousands of fake IPs
+   trips the global window within ~25 tries and locks EVERYONE
+   out for a cooldown window; a single IP that keeps guessing
+   trips its own escalating lockout. Timing is added to /api/auth
+   responses so success and failure take the same amount of time.
+-------------------------------------------------------- */
+const AUTH_FAIL_WINDOW_MS = 15 * 60 * 1000;
+const AUTH_GLOBAL_FAIL_MAX = 25;
+const AUTH_GLOBAL_LOCK_MS = 90 * 1000;
+const AUTH_IP_FAIL_MAX = 8;
+const AUTH_IP_MIN_LOCK_MS = 30 * 1000;
+const AUTH_IP_MAX_LOCK_MS = 30 * 60 * 1000;
+const authFailureTimes = [];        // global sliding window of failure timestamps
+let authGlobalLockUntil = 0;
+const authIpFailures = new Map();   // ip -> { count, since, lockUntil }
+
+function authLockInfo(ip) {
+  const now = Date.now();
+  if (now < authGlobalLockUntil) return { until: authGlobalLockUntil, global: true };
+  const f = authIpFailures.get(ip);
+  if (f && f.lockUntil > now) return { until: f.lockUntil, global: false };
+  return null;
+}
+function noteAuthFailure(ip) {
+  const now = Date.now();
+  while (authFailureTimes.length && authFailureTimes[0] <= now - AUTH_FAIL_WINDOW_MS) authFailureTimes.shift();
+  authFailureTimes.push(now);
+  if (authFailureTimes.length >= AUTH_GLOBAL_FAIL_MAX) {
+    authGlobalLockUntil = now + AUTH_GLOBAL_LOCK_MS;
+    authFailureTimes.length = 0;
+    return; // everyone gets a cooldown — no per-IP bookkeeping needed
+  }
+  let f = authIpFailures.get(ip);
+  if (!f) { f = { count: 0, since: now, lockUntil: 0 }; authIpFailures.set(ip, f); }
+  if (now - f.since > AUTH_FAIL_WINDOW_MS) { f.count = 0; f.since = now; }
+  f.count++;
+  if (f.count >= AUTH_IP_FAIL_MAX) {
+    f.lockUntil = now + Math.min(AUTH_IP_MIN_LOCK_MS * Math.pow(2, f.count - AUTH_IP_FAIL_MAX), AUTH_IP_MAX_LOCK_MS);
+    f.count = 0;
+  } else {
+    f.lockUntil = 0;
+  }
+  // keep the map from growing forever (this IP was cleared on success)
+  if (authIpFailures.size > 2000) {
+    for (const [k, v] of authIpFailures) if (now - v.since > AUTH_FAIL_WINDOW_MS * 2) authIpFailures.delete(k);
+  }
+}
+function noteAuthSuccess(ip) {
+  authIpFailures.delete(ip);
+}
+function authJitterDelay() {
+  // Same-ish response time whether the passcode was right or wrong, so
+  // a remote observer can't use response timing to confirm guesses.
+  return new Promise(function (resolve) { setTimeout(resolve, 120 + Math.floor(Math.random() * 280)); });
 }
 
 const DATA_DIR = path.join(__dirname, "data");
@@ -328,8 +478,34 @@ async function seedMissingKeys() {
     try {
       const existing = await storageGet(key);
       if (existing === null) {
-        await storageSet(key, JSON.stringify(SEEDS[key]));
-        console.log("Seeded missing key: " + key);
+        if (key === "voxel-settings") {
+          // Fresh install: the owner gets a RANDOM one-time setup
+          // passcode, printed once to the server log, that only works
+          // for the first login (it hands over to whatever hidden
+          // passcode the owner chooses). Nothing guessable is ever a live
+          // credential — a fixed default sitting in a public repo would
+          // just hand the site to the first person who reads it.
+          const oneTimeSetup = "voxel-" + crypto.randomBytes(12).toString("base64url");
+          const settings = JSON.parse(JSON.stringify(SEEDS[key]));
+          settings.security.passcodeHash = crypto.createHash("sha256").update(oneTimeSetup).digest("hex");
+          settings.security._setupPending = true;
+          await storageSet(key, JSON.stringify(settings));
+          console.log("");
+          console.log("=====================================================");
+          console.log("  FIRST-TIME OWNER LOGIN");
+          console.log("  One-time setup passcode (use this once to log in,");
+          console.log("  then set a passcode only you know):");
+          console.log("");
+          console.log("    " + oneTimeSetup);
+          console.log("");
+          console.log("  This code is shown in the server log ONCE and never");
+          console.log("  again - treat it like a master key until you log in.");
+          console.log("=====================================================");
+          console.log("");
+        } else {
+          await storageSet(key, JSON.stringify(SEEDS[key]));
+          console.log("Seeded missing key: " + key);
+        }
       }
     } catch (e) {
       console.error("Seeding failed for " + key + ":", e);
@@ -418,6 +594,7 @@ app.post("/api/storage/:key", async (req, res) => {
       return;
     }
     let finalValue = value;
+    let passcodeChangedHere = false;
     if (key === "voxel-settings") {
       // The dashboard saves the WHOLE settings object, but the public
       // GET strips the webhook URL and passcode hash — so a plain
@@ -436,16 +613,41 @@ app.post("/api/storage/:key", async (req, res) => {
       if (stored) {
         incoming.security = incoming.security && typeof incoming.security === "object" ? incoming.security : {};
         if (incoming.security._updatePasscode === true) {
-          delete incoming.security._updatePasscode; // owner set a new passcode — keep the incoming hash
+          // Owner intentionally set a new passcode — keep the incoming
+          // hash, but never the shipped default (that passcode is public
+          // knowledge); the handover flags are server-owned, and marking
+          // them here means the next auth is a normal one. Every OTHER
+          // session is revoked so a long-stolen token dies the moment the
+          // owner rotates the passcode (the current tab stays logged in).
+          delete incoming.security._updatePasscode;
+          const newHash = incoming.security.passcodeHash;
+          if (typeof newHash !== "string" || !PASSCODE_HASH_RE.test(newHash)) {
+            res.status(400).json({ error: "invalid_settings" });
+            return;
+          }
+          if (newHash === SEED_PASSCODE_HASH) {
+            res.status(400).json({ error: "default_passcode_not_allowed" });
+            return;
+          }
+          incoming.security._setupPending = false;
+          incoming.security._passcodeChanged = true;
+          passcodeChangedHere = true;
         } else {
-          // Preserve the stored credential (hash, or legacy plaintext).
+          // Preserve the stored credential (hash, or legacy plaintext)
+          // and the server-owned setup flags so a plain round-trip can
+          // never reset them back to the public default.
+          incoming.security._setupPending = !!(stored.security && stored.security._setupPending);
+          incoming.security._passcodeChanged = !!(stored.security && stored.security._passcodeChanged);
           if (stored.security && typeof stored.security.passcodeHash === "string") {
             incoming.security.passcodeHash = stored.security.passcodeHash;
           } else if (stored.security && typeof stored.security.passcode === "string") {
             delete incoming.security.passcodeHash;
             incoming.security.passcode = stored.security.passcode;
-          } else if (typeof incoming.security.passcodeHash !== "string") {
-            incoming.security.passcodeHash = SEED_PASSCODE_HASH;
+          } else {
+            // Corrupt document — refuse rather than silently falling back
+            // to the public default credential.
+            res.status(400).json({ error: "invalid_settings" });
+            return;
           }
         }
         if (incoming._updateWebhook === true) {
@@ -454,12 +656,27 @@ app.post("/api/storage/:key", async (req, res) => {
           incoming.webhookUrl = typeof stored.webhookUrl === "string" ? stored.webhookUrl : "";
         }
       } else {
+        // No stored settings (shouldn't happen — the server seeds them)
+        // — treat as a fresh setup so a write can't skip the handover.
+        incoming.security = incoming.security && typeof incoming.security === "object" ? incoming.security : {};
         delete incoming.security._updatePasscode;
+        incoming.security._setupPending = true;
+        incoming.security._passcodeChanged = false;
         delete incoming._updateWebhook;
       }
       finalValue = JSON.stringify(incoming);
     }
     await storageSet(key, finalValue);
+    if (key === "voxel-settings" && passcodeChangedHere) {
+      // Rotate the passcode -> kill every other live session; the
+      // current tab keeps working so the owner finishes their save.
+      const currentTokenHash = (function () {
+        const t = req.headers["x-voxel-token"];
+        return typeof t === "string" ? hashToken(t) : null;
+      })();
+      for (const [h] of adminSessions) if (h !== currentTokenHash) adminSessions.delete(h);
+      await persistSessions();
+    }
     res.json({ ok: true });
   } catch (e) {
     console.error("storage write failed:", e);
@@ -468,18 +685,35 @@ app.post("/api/storage/:key", async (req, res) => {
 });
 
 /* ---------------------------------------------------------
-   Admin auth — trades the raw passcode for a short-lived
-   session token. The passcode itself is verified server-side
-   (the hash is never sent to browsers, so it can't be attacked
-   offline), using a timing-safe comparison; tokens live in
-   memory only (a server restart just means the owner re-enters
-   through the footer gate, which they already do per visit
-   anyway). Rate-limited to blunt brute-force attempts.
---------------------------------------------------------- */
-app.post("/api/auth", rateLimit("auth", 8, 15 * 60 * 1000), async (req, res) => {
+   Admin auth — trades the raw passcode for a short-lived admin
+   session token. The passcode is verified server-side only (the
+   hash is never sent to browsers, so it can't be attacked
+   offline), with a timing-safe compare and a response-time
+   jitter so success and failure are indistinguishable by wire
+   timing. Trips come from brute forcing, not correctness, so
+   before the passcode is even checked the request is refused
+   outright when the global or this-IP failure lockout is active
+   (see authLockInfo) — a spoofed X-Forwarded-For can reset the
+   per-IP limiter, but the global window is keyed on nothing an
+   attacker chooses. On a fresh install the stored hash is a
+   RANDOM one-time setup code, so a login attempt is answered
+   with 403 setup_required and a token is never issued until the
+   owner completes the one-time change (see /api/auth/change-default
+   below). Same applies to the ancient fixed default if a
+   pre-hardening install still carries it.
+-------------------------------------------------------- */
+app.post("/api/auth", rateLimit("auth", 12, 15 * 60 * 1000), async (req, res) => {
   try {
+    const ip = clientIp(req);
+    const locked = authLockInfo(ip);
+    if (locked) {
+      res.status(429).json({ error: "too_many_attempts", retryAfterSec: Math.max(1, Math.ceil((locked.until - Date.now()) / 1000)) });
+      return;
+    }
     const password = req.body && typeof req.body.password === "string" ? req.body.password : "";
     if (!password || password.length > 200) {
+      await authJitterDelay();
+      noteAuthFailure(ip);
       res.status(401).json({ error: "wrong_passcode" });
       return;
     }
@@ -499,9 +733,24 @@ app.post("/api/auth", rateLimit("auth", 8, 15 * 60 * 1000), async (req, res) => 
       expectedHash.length === candidate.length &&
       crypto.timingSafeEqual(Buffer.from(candidate), Buffer.from(expectedHash));
     if (!matches) {
+      await authJitterDelay();
+      noteAuthFailure(ip);
       res.status(401).json({ error: "wrong_passcode" });
       return;
     }
+    // Correct passcode, but the stored one is still the one-time setup
+    // code (fresh install, or a legacy default) — no token until the
+    // owner has claimed it with a passcode of their own.
+    const sec = (stored && stored.security) || {};
+    const setupPending = sec._setupPending === true;
+    const legacyDefault = sec.passcodeHash === SEED_PASSCODE_HASH && sec._passcodeChanged !== true;
+    if (setupPending || legacyDefault) {
+      await authJitterDelay();
+      res.status(403).json({ error: "setup_required" });
+      return;
+    }
+    noteAuthSuccess(ip);
+    await authJitterDelay();
     const token = crypto.randomUUID();
     const expiresAt = Date.now() + ADMIN_SESSION_TTL;
     const tokenHash = hashToken(token);
@@ -515,15 +764,105 @@ app.post("/api/auth", rateLimit("auth", 8, 15 * 60 * 1000), async (req, res) => 
 });
 
 /* ---------------------------------------------------------
+   First-login handover — available ONLY while the stored
+   credential is the one-time setup code (or the legacy default:
+   random _setupPending on new installs, the old fixed hash on
+   pre-hardening installs). It verifies that setup code, swaps in
+   a real passcode, marks the handover complete, kills every
+   previously existing session (on a takeover attempt this would
+   eject the attacker mid-session), and issues a fresh token for
+   the owner. The new passcode is sent once over TLS and hashed
+   server-side; the public read path never sees any hash.
+   Same rate limit and failure lockout as /api/auth.
+-------------------------------------------------------- */
+const PASSCODE_MIN_LENGTH = 12;
+const PASSCODE_HASH_RE = /^[0-9a-f]{64}$/;
+
+app.post("/api/auth/change-default", rateLimit("auth", 12, 15 * 60 * 1000), async (req, res) => {
+  try {
+    const ip = clientIp(req);
+    const locked = authLockInfo(ip);
+    if (locked) {
+      res.status(429).json({ error: "too_many_attempts", retryAfterSec: Math.max(1, Math.ceil((locked.until - Date.now()) / 1000)) });
+      return;
+    }
+    const current = req.body && typeof req.body.current === "string" ? req.body.current : "";
+    const next = req.body && typeof req.body.newPassword === "string" ? req.body.newPassword : "";
+    if (!current || !next || current.length > 200 || next.length > 200) {
+      res.status(400).json({ error: "invalid_request" });
+      return;
+    }
+    if (next.length < PASSCODE_MIN_LENGTH) {
+      res.status(400).json({ error: "passcode_too_short" });
+      return;
+    }
+    if (next === current) {
+      res.status(400).json({ error: "passcode_must_differ" });
+      return;
+    }
+    const raw = await storageGet("voxel-settings");
+    let stored = null;
+    if (raw) { try { stored = JSON.parse(raw); } catch (e) { stored = null; } }
+    const sec = (stored && stored.security) || {};
+    const setupPending = sec._setupPending === true;
+    const legacyDefault = sec.passcodeHash === SEED_PASSCODE_HASH && sec._passcodeChanged !== true;
+    if (!setupPending && !legacyDefault) {
+      // Already claimed — nothing to hand over.
+      res.status(403).json({ error: "setup_not_required" });
+      return;
+    }
+    const currentHash = crypto.createHash("sha256").update(current).digest("hex");
+    if (sec.passcodeHash !== currentHash) {
+      await authJitterDelay();
+      noteAuthFailure(ip);
+      res.status(401).json({ error: "wrong_passcode" });
+      return;
+    }
+    const nextHash = crypto.createHash("sha256").update(next).digest("hex");
+    if (nextHash === SEED_PASSCODE_HASH) {
+      res.status(400).json({ error: "default_passcode_not_allowed" });
+      return;
+    }
+    // Commit the handover, then reissue the session map from scratch.
+    const nextSettings = Object.assign({}, stored);
+    nextSettings.security = Object.assign({}, sec, {
+      passcodeHash: nextHash,
+      _setupPending: false,
+      _passcodeChanged: true,
+    });
+    delete nextSettings.security.passcode; // migrate any legacy plaintext away
+    delete nextSettings.security._updatePasscode;
+    await storageSet("voxel-settings", JSON.stringify(nextSettings));
+    adminSessions.clear();
+    const token = crypto.randomUUID();
+    adminSessions.set(hashToken(token), Date.now() + ADMIN_SESSION_TTL);
+    await persistSessions();
+    noteAuthSuccess(ip);
+    await authJitterDelay();
+    res.json({ token: token });
+  } catch (e) {
+    console.error("change-default failed:", e);
+    res.status(500).json({ error: "change_default_failed" });
+  }
+});
+
+/* ---------------------------------------------------------
    Public append-only inquiries — customers log an order attempt
    here. The server owns the list: it sanitizes each entry and
    caps it at the most recent 200 so it can never grow unbounded
    on the free database tier. Writes are serialized through a
    promise chain so two customers ordering at the same moment
    can no longer overwrite each other's entry (lost-update race).
---------------------------------------------------------- */
+   A global burst cap (independent of the per-IP limiter, so fake
+   header IPs can't dodge it) keeps a request flood from filling
+   the database faster than the 200-entry rollover.
+-------------------------------------------------------- */
 let inquiryChain = Promise.resolve();
 app.post("/api/inquiries", rateLimit("inq", 20, 60 * 60 * 1000), async (req, res) => {
+  if (!globalBurst("inq", 250, 60 * 60 * 1000)) {
+    res.status(429).json({ error: "too_many_requests" });
+    return;
+  }
   const entry = req.body && req.body.entry;
   if (!entry || typeof entry !== "object" || !entry.id || typeof entry.label !== "string") {
     res.status(400).json({ error: "invalid_entry" });

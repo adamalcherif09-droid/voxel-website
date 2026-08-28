@@ -243,6 +243,23 @@ function apiAuth(password) {
     .catch(function () { return null; });
 }
 
+// Like apiAuth, but keeps the HTTP status and the server's error code
+// so a caller can tell "wrong passcode" from "this is a fresh install
+// that still needs its one-time setup" (403 setup_required).
+function apiAuthDetailed(password) {
+  return fetch("/api/auth", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ password: password }),
+  })
+    .then(function (res) {
+      return res.json().catch(function () { return {}; }).then(function (json) {
+        return { status: res.status, ok: res.ok, token: json.token || null, error: json.error || null };
+      });
+    })
+    .catch(function () { return { status: 0, ok: false, token: null, error: "network" }; });
+}
+
 // Resolves to { ok: true, value: parsedValueOrNullOrCorruptFlaggedFalse }
 // — `ok:false` means we could NOT reliably read the key (network error,
 // server error, or corrupt payload). Callers must treat ok:false as

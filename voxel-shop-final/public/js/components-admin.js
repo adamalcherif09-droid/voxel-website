@@ -14,6 +14,10 @@ function AdminGate(props) {
   var _shake = React.useState(false); var shake = _shake[0]; var setShake = _shake[1];
   var _attempts = React.useState(0); var attempts = _attempts[0]; var setAttempts = _attempts[1];
   var _checking = React.useState(false); var checking = _checking[0]; var setChecking = _checking[1];
+  var _setupCurrent = React.useState(""); var setupCurrent = _setupCurrent[0]; var setSetupCurrent = _setupCurrent[1];
+  var _setupNew = React.useState(""); var setupNew = _setupNew[0]; var setSetupNew = _setupNew[1];
+  var _setupError = React.useState(""); var setupError = _setupError[0]; var setSetupError = _setupError[1];
+  var _setupChecking = React.useState(false); var setupChecking = _setupChecking[0]; var setSetupChecking = _setupChecking[1];
 
   function pressShape(shape) {
     var next = comboProgress.concat([shape]);
@@ -40,11 +44,20 @@ function AdminGate(props) {
     // The server is the single source of truth for the passcode — it
     // verifies and returns a short-lived admin session token. The hash
     // is never shipped to browsers, so it can't be brute-forced offline.
-    apiAuth(pw).then(function (token) {
+    apiAuthDetailed(pw).then(function (r) {
       setChecking(false);
-      if (token) {
+      if (r && r.token) {
+        setAdminApiToken(r.token);
         setPw("");
         props.onSuccess();
+        return;
+      }
+      if (r && r.status === 403 && r.error === "setup_required") {
+        // Fresh install: the stored passcode is a one-time setup code.
+        // Route to the forced handover screen instead of the door.
+        setPw("");
+        setAttempts(0);
+        setStage("setup");
         return;
       }
       var nextAttempts = attempts + 1;
@@ -59,6 +72,55 @@ function AdminGate(props) {
         setError(nextAttempts + " of 3");
       }
     });
+  }
+
+  function submitSetup() {
+    var trimmed = (setupNew || "").trim();
+    if (setupChecking) return;
+    if (!setupCurrent || setupNew.length === 0) {
+      setSetupError("Enter both fields.");
+      return;
+    }
+    if (trimmed.length < 12) {
+      setSetupError("The new passcode must be at least 12 characters.");
+      return;
+    }
+    if (trimmed === setupCurrent) {
+      setSetupError("The new passcode must be different from the setup one.");
+      return;
+    }
+    setSetupChecking(true);
+    setSetupError("");
+    fetch("/api/auth/change-default", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ current: setupCurrent, newPassword: trimmed }),
+    })
+      .then(function (res) {
+        return res.json().catch(function () { return {}; }).then(function (json) { return { status: res.status, json: json }; });
+      })
+      .then(function (r) {
+        setSetupChecking(false);
+        if (r.json && r.json.token) {
+          setAdminApiToken(r.json.token);
+          setSetupCurrent("");
+          setSetupNew("");
+          props.onSuccess();
+          return;
+        }
+        var msg;
+        if (r.status === 400 && r.json.error === "passcode_too_short") msg = "Make the new passcode at least 12 characters.";
+        else if (r.status === 400 && r.json.error === "default_passcode_not_allowed") msg = "That's the well-known default passcode — please choose your own.";
+        else if (r.status === 400 && r.json.error === "passcode_must_differ") msg = "The new passcode must be different from the setup one.";
+        else if (r.status === 401 && r.json.error === "wrong_passcode") msg = "The setup passcode isn't right — check the one printed in the server log.";
+        else if (r.status === 429) msg = "Too many attempts — wait a minute and try again.";
+        else msg = "Couldn't finish setup right now. Reload the page and try the door again.";
+        setSetupError(msg);
+      })
+      .catch(function () {
+        setSetupChecking(false);
+        setSetupError("Couldn't reach the server — check your connection and try again.");
+      });
   }
 
   return (
@@ -110,6 +172,44 @@ function AdminGate(props) {
           </div>
           {error && <div className="text-xs" style={{ color: "var(--danger)" }}>{error}</div>}
           <PrimaryButton onClick={submitPassword} disabled={checking}>{checking ? "Checking…" : "Enter"}</PrimaryButton>
+        </div>
+      )}
+
+      {stage === "setup" && (
+        <div className="mt-8 flex flex-col gap-3 text-left">
+          <p className="text-sm" style={{ color: "var(--ink)" }}>
+            This is the first time the owner door has opened on this site. Before your dashboard is usable, pick a hidden passcode only you know.
+          </p>
+          <input
+            type="password"
+            value={setupCurrent}
+            onChange={function (e) { setSetupCurrent(e.target.value); }}
+            placeholder="One-time setup passcode"
+            autoComplete="off"
+            autoCorrect="off"
+            autoCapitalize="off"
+            spellCheck="false"
+            className="w-full px-3.5 py-2.5 rounded-md text-sm text-center"
+            style={{ background: "var(--panel)", border: "1px solid var(--line)", color: "var(--ink)" }}
+          />
+          <input
+            type="password"
+            value={setupNew}
+            onChange={function (e) { setSetupNew(e.target.value); }}
+            onKeyDown={function (e) { if (e.key === "Enter") submitSetup(); }}
+            placeholder="New passcode — at least 12 characters"
+            autoComplete="off"
+            autoCorrect="off"
+            autoCapitalize="off"
+            spellCheck="false"
+            className="w-full px-3.5 py-2.5 rounded-md text-sm text-center"
+            style={{ background: "var(--panel)", border: "1px solid var(--line)", color: "var(--ink)" }}
+          />
+          <p className="text-xs" style={{ color: "var(--ink-dim)" }}>
+            Tip: the setup passcode is printed once in your server log. Keep the new one somewhere only you can see.
+          </p>
+          {setupError && <div className="text-xs" style={{ color: "var(--danger)" }}>{setupError}</div>}
+          <PrimaryButton onClick={submitSetup} disabled={setupChecking}>{setupChecking ? "Setting up…" : "Set my passcode"}</PrimaryButton>
         </div>
       )}
     </div>
@@ -1037,9 +1137,12 @@ function AdminSettings(props) {
     flashSec("Click count updated.");
   }
   function savePasscode() {
-    if (!passcode.trim()) return;
+    var value = (passcode || "").trim();
+    if (!value) return;
+    if (value.length < 12) { flashSec("New passcode must be at least 12 characters."); return; }
+    if (value.toLowerCase() === "voxel-owner") { flashSec("That's the well-known default passcode — please choose your own."); return; }
     setSavingPasscode(true);
-    sha256(passcode.trim()).then(function (hash) {
+    sha256(value).then(function (hash) {
       setSavingPasscode(false);
       props.updateSettings(function (prev) {
         var next = Object.assign({}, prev);
