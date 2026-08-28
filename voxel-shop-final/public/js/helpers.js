@@ -254,7 +254,7 @@ function apiAuthDetailed(password) {
   })
     .then(function (res) {
       return res.json().catch(function () { return {}; }).then(function (json) {
-        return { status: res.status, ok: res.ok, token: json.token || null, error: json.error || null };
+        return { status: res.status, ok: res.ok, token: json.token || null, error: json.error || null, mode: json.mode || null };
       });
     })
     .catch(function () { return { status: 0, ok: false, token: null, error: "network" }; });

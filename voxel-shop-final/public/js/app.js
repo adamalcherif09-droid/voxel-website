@@ -125,11 +125,14 @@ function App() {
     return guardedSave("voxel-catalog", next);
   }
   function persistSettings(updaterOrValue) {
-    var resolved;
-    setSettings(function (prev) {
-      resolved = typeof updaterOrValue === "function" ? updaterOrValue(prev) : updaterOrValue;
-      return resolved;
-    });
+    // Compute the next settings SYNCHRONOUSLY from the state we already
+    // have (same reason as persistCatalog below): React 18 does not
+    // guarantee a function updater passed to setState has run by the time
+    // the following line executes, so reading a variable captured inside
+    // the updater can POST {value: undefined} -> the server replies 400
+    // missing_value and the save silently fails with "Saving failed".
+    var resolved = typeof updaterOrValue === "function" ? updaterOrValue(settings) : updaterOrValue;
+    setSettings(resolved);
     return guardedSave("voxel-settings", resolved);
   }
   function persistContent(next) {

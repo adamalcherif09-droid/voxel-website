@@ -18,6 +18,7 @@ function AdminGate(props) {
   var _setupNew = React.useState(""); var setupNew = _setupNew[0]; var setSetupNew = _setupNew[1];
   var _setupError = React.useState(""); var setupError = _setupError[0]; var setSetupError = _setupError[1];
   var _setupChecking = React.useState(false); var setupChecking = _setupChecking[0]; var setSetupChecking = _setupChecking[1];
+  var _setupMode = React.useState("fresh"); var setupMode = _setupMode[0]; var setSetupMode = _setupMode[1];
 
   function pressShape(shape) {
     var next = comboProgress.concat([shape]);
@@ -53,10 +54,12 @@ function AdminGate(props) {
         return;
       }
       if (r && r.status === 403 && r.error === "setup_required") {
-        // Fresh install: the stored passcode is a one-time setup code.
-        // Route to the forced handover screen instead of the door.
+        // The stored passcode is still the one-time setup code (fresh
+        // install) or the public default (legacy install). Route to the
+        // forced handover screen; tell it which voice to use.
         setPw("");
         setAttempts(0);
+        setSetupMode(r.mode === "legacy" ? "legacy" : "fresh");
         setStage("setup");
         return;
       }
@@ -112,7 +115,7 @@ function AdminGate(props) {
         if (r.status === 400 && r.json.error === "passcode_too_short") msg = "Make the new passcode at least 12 characters.";
         else if (r.status === 400 && r.json.error === "default_passcode_not_allowed") msg = "That's the well-known default passcode — please choose your own.";
         else if (r.status === 400 && r.json.error === "passcode_must_differ") msg = "The new passcode must be different from the setup one.";
-        else if (r.status === 401 && r.json.error === "wrong_passcode") msg = "The setup passcode isn't right — check the one printed in the server log.";
+        else if (r.status === 401 && r.json.error === "wrong_passcode") msg = setupMode === "legacy" ? "The current passcode isn't right — try the one that worked before, usually the original starter one." : "The setup passcode isn't right — check the one printed in the server log.";
         else if (r.status === 429) msg = "Too many attempts — wait a minute and try again.";
         else msg = "Couldn't finish setup right now. Reload the page and try the door again.";
         setSetupError(msg);
@@ -177,14 +180,20 @@ function AdminGate(props) {
 
       {stage === "setup" && (
         <div className="mt-8 flex flex-col gap-3 text-left">
-          <p className="text-sm" style={{ color: "var(--ink)" }}>
-            This is the first time the owner door has opened on this site. Before your dashboard is usable, pick a hidden passcode only you know.
-          </p>
+          {setupMode === "legacy" ? (
+            <p className="text-sm" style={{ color: "var(--ink)" }}>
+              Your site came with the well-known starter passcode. Before your dashboard is usable, replace it with a hidden passcode only you know.
+            </p>
+          ) : (
+            <p className="text-sm" style={{ color: "var(--ink)" }}>
+              This is the first time the owner door has opened on this site. Before your dashboard is usable, pick a hidden passcode only you know.
+            </p>
+          )}
           <input
             type="password"
             value={setupCurrent}
             onChange={function (e) { setSetupCurrent(e.target.value); }}
-            placeholder="One-time setup passcode"
+            placeholder={setupMode === "legacy" ? "Current passcode" : "One-time setup passcode"}
             autoComplete="off"
             autoCorrect="off"
             autoCapitalize="off"
@@ -205,9 +214,15 @@ function AdminGate(props) {
             className="w-full px-3.5 py-2.5 rounded-md text-sm text-center"
             style={{ background: "var(--panel)", border: "1px solid var(--line)", color: "var(--ink)" }}
           />
-          <p className="text-xs" style={{ color: "var(--ink-dim)" }}>
-            Tip: the setup passcode is printed once in your server log. Keep the new one somewhere only you can see.
-          </p>
+          {setupMode === "legacy" ? (
+            <p className="text-xs" style={{ color: "var(--ink-dim)" }}>
+              "Current" is the passcode that worked before — for a site that never changed it, that's the original starter one. You only enter it once.
+            </p>
+          ) : (
+            <p className="text-xs" style={{ color: "var(--ink-dim)" }}>
+              Tip: the setup passcode is printed once in your server log. Keep the new one somewhere only you can see.
+            </p>
+          )}
           {setupError && <div className="text-xs" style={{ color: "var(--danger)" }}>{setupError}</div>}
           <PrimaryButton onClick={submitSetup} disabled={setupChecking}>{setupChecking ? "Setting up…" : "Set my passcode"}</PrimaryButton>
         </div>

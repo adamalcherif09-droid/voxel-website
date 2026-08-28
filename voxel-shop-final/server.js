@@ -746,7 +746,11 @@ app.post("/api/auth", rateLimit("auth", 12, 15 * 60 * 1000), async (req, res) =>
     const legacyDefault = sec.passcodeHash === SEED_PASSCODE_HASH && sec._passcodeChanged !== true;
     if (setupPending || legacyDefault) {
       await authJitterDelay();
-      res.status(403).json({ error: "setup_required" });
+      // mode tells the setup screen how to talk to the owner: a fresh
+      // install has a random one-time code, a legacy install still holds
+      // the public default and the owner's "current" field is simply
+      // whatever passcode worked before (usually the original one).
+      res.status(403).json({ error: "setup_required", mode: setupPending ? "fresh" : "legacy" });
       return;
     }
     noteAuthSuccess(ip);
