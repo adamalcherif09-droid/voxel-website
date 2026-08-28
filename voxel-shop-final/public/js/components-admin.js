@@ -577,7 +577,7 @@ function AdminCatalog(props) {
     setTvError("");
     setTvSummary("");
     var url = "/api/thingiverse-search?q=" + encodeURIComponent(tvTerm.trim()) + "&limit=" + encodeURIComponent(tvCount);
-    fetch(url)
+    fetch(url, { headers: { "x-voxel-token": getAdminApiToken() || "" } })
       .then(function (r) { return r.json().then(function (body) { return { ok: r.ok, body: body }; }); })
       .then(function (res) {
         setTvSearching(false);

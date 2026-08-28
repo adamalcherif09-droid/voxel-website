@@ -12,8 +12,12 @@ app.set("trust proxy", 1);
 // gzip shrinks API responses a lot — the catalog carries embedded
 // photos as base64 text, which compresses roughly 25-35% on the wire.
 app.use(compression());
-// Catalog entries include compressed photos as text, so allow a generous body size.
-app.use(express.json({ limit: "15mb" }));
+// Catalog entries include compressed photos as text, so allow a generous
+// body size for the admin's storage writes. Every other API route takes
+// only tiny JSON (auth, inquiries, pings, handover) — a tight limit there
+// keeps a multi-megabyte flood from landing on the public endpoints.
+app.use("/api/storage", express.json({ limit: "15mb" }));
+app.use("/api", express.json({ limit: "32kb" }));
 
 /* ---------------------------------------------------------
    Security headers — applied to every response. The CSP allows
@@ -54,6 +58,13 @@ app.use((req, res, next) => {
   // The site never asks for device/permission capabilities — forbid
   // them outright so a compromised script has nothing to bargain with.
   res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=(), usb=(), browsing-topics=()");
+  // API responses carry private data (inquiry notes, settings-derived
+  // state) — never let a cache store them, and keep other origins from
+  // embedding them.
+  if (req.path.indexOf("/api") === 0) {
+    res.setHeader("Cache-Control", "no-store");
+    res.setHeader("Cross-Origin-Resource-Policy", "same-origin");
+  }
   next();
 });
 
@@ -77,6 +88,14 @@ function normalizeHostHeader(raw) {
   host = host.replace(/^https?:\/\//, "").split("/")[0];
   // strip port (handles "[::1]:3000" too)
   host = host.replace(/^\[([^\]]+)\](?::\d+)?$/, "$1").replace(/:\d+$/, "");
+  if (host === "::1") return host;
+  // Host smuggling / DNS-rebinding defense: a real hostname is only
+  // letters, digits, dots, and hyphens. Rejecting anything else (commas
+  // that smuggle a second Host, '@' that smuggles userinfo, control
+  // characters) keeps the allowlist check from being bypassed by
+  // multi-host or mis-shaped headers.
+  if (!/^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$/.test(host)) return "";
+  if (host.indexOf("..") !== -1) return "";
   return host;
 }
 function hostAllowed(host) {
@@ -394,6 +413,33 @@ function authJitterDelay() {
   // Same-ish response time whether the passcode was right or wrong, so
   // a remote observer can't use response timing to confirm guesses.
   return new Promise(function (resolve) { setTimeout(resolve, 120 + Math.floor(Math.random() * 280)); });
+}
+
+// Server-side fetch with a hard deadline, so a slow or hostile upstream
+// (Thingiverse, Discord) can't pin a socket open indefinitely.
+function fetchWithTimeout(url, opts, ms) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(function () { ctrl.abort(); }, ms || 15000);
+  return fetch(url, Object.assign({}, opts, { signal: ctrl.signal }))
+    .finally(function () { clearTimeout(timer); });
+}
+
+// A webhook URL that actually is a Discord webhook (snowflake id + token
+// under /api/webhooks/) and nothing else. This is the ONLY shape the
+// owner's dashboard can produce, and allowing any other URL would turn
+// the public ping relay into a blind-request gadget the moment a
+// misconfigured or internal address was ever saved.
+function isDiscordWebhookUrl(raw) {
+  var s = String(raw || "").trim();
+  if (s.length < 20 || s.length > 400) return false;
+  const base = s.indexOf("/api/webhooks/");
+  if (!/^https:\/\/(www\.)?discord(app)?\.com\/api\/webhooks\//.test(s)) return false;
+  var rest = s.slice(base + "/api/webhooks/".length);
+  var parts = rest.split("/");
+  if (parts.length < 2 || parts.length > 2) return false;
+  if (!/^\d{10,25}$/.test(parts[0])) return false; // snowflake id
+  if (!/^[A-Za-z0-9_-]+$/.test(parts[1])) return false; // opaque token, no slashes/query
+  return true;
 }
 
 const DATA_DIR = path.join(__dirname, "data");
@@ -733,6 +779,16 @@ app.post("/api/storage/:key", async (req, res) => {
         }
         if (incoming._updateWebhook === true) {
           delete incoming._updateWebhook; // owner set a new webhook — keep the incoming URL
+          var hookVal = typeof incoming.webhookUrl === "string" ? incoming.webhookUrl.trim() : "";
+          // Only a Discord webhook link can be stored — an arbitrary URL
+          // (an internal address, a file:// path, a stale or rotated hook)
+          // would otherwise make the public ping relay usable as a blind
+          // request gadget pointed anywhere.
+          if (hookVal && !isDiscordWebhookUrl(hookVal)) {
+            res.status(400).json({ error: "webhook_url_invalid" });
+            return;
+          }
+          incoming.webhookUrl = hookVal;
         } else {
           incoming.webhookUrl = typeof stored.webhookUrl === "string" ? stored.webhookUrl : "";
         }
@@ -745,6 +801,31 @@ app.post("/api/storage/:key", async (req, res) => {
         incoming.security._passcodeChanged = false;
         delete incoming._updateWebhook;
       }
+      // The shape-challenge security settings travel to the browser (they
+      // ARE the gate's UI) but a malformed write — a corrupted doc, or a
+      // bad call from a credential holder — could lock the owner OUT of
+      // the gate or make it unlaunchable. Clamp to exactly what the
+      // dashboard's own controls allow, so no valid state is rejected and
+      // no invalid one is accepted.
+      var clicks = incoming.security.triggerClicks;
+      if (typeof clicks !== "number") clicks = parseInt(clicks, 10);
+      if (!Number.isFinite(clicks) || clicks < 3 || clicks > 10) {
+        res.status(400).json({ error: "invalid_security_settings" });
+        return;
+      }
+      incoming.security.triggerClicks = Math.floor(clicks);
+      var combo = incoming.security.combo;
+      if (!Array.isArray(combo) || combo.length < 3 || combo.length > 6) {
+        res.status(400).json({ error: "invalid_security_settings" });
+        return;
+      }
+      var allowedShapes = ["circle", "triangle", "diamond", "square", "star", "hexagon"];
+      var shapesOk = combo.every(function (s) { return allowedShapes.indexOf(s) !== -1; });
+      if (!shapesOk) {
+        res.status(400).json({ error: "invalid_security_settings" });
+        return;
+      }
+      incoming.security.combo = combo.slice(0, 6);
       finalValue = JSON.stringify(incoming);
     }
     await storageSet(key, finalValue);
@@ -1019,6 +1100,10 @@ app.post("/api/inquiries", rateLimit("inq", 20, 60 * 60 * 1000), async (req, res
 --------------------------------------------------------- */
 app.post("/api/ping-discord", rateLimit("ping", 15, 60 * 60 * 1000), async (req, res) => {
   try {
+    if (!globalBurst("ping", 300, 60 * 60 * 1000)) {
+      res.status(429).json({ ok: false, error: "too_many_requests" });
+      return;
+    }
     const raw = await storageGet("voxel-settings");
     let stored = null;
     if (raw) { try { stored = JSON.parse(raw); } catch (e) { stored = null; } }
@@ -1027,16 +1112,22 @@ app.post("/api/ping-discord", rateLimit("ping", 15, 60 * 60 * 1000), async (req,
       res.json({ ok: false, error: "no_webhook" });
       return;
     }
+    // Defense in depth: even if an invalid URL was ever stored, never
+    // blind-POST to it (see the save-time allowlist).
+    if (!isDiscordWebhookUrl(hook)) {
+      res.json({ ok: false, error: "invalid_webhook" });
+      return;
+    }
     const content = String((req.body && req.body.content) || "").trim().slice(0, 500);
     if (!content) {
       res.status(400).json({ ok: false, error: "empty_content" });
       return;
     }
-    const r = await fetch(hook, {
+    const r = await fetchWithTimeout(hook, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ content: content }),
-    });
+    }, 8000);
     res.json({ ok: r.ok });
   } catch (e) {
     console.error("discord ping failed:", e);
@@ -1109,6 +1200,12 @@ async function mapPool(items, limit, fn) {
 
 app.get("/api/thingiverse-search", rateLimit("tv", 10, 60 * 60 * 1000), async (req, res) => {
   try {
+    if (!isAuthedAdmin(req)) {
+      // This endpoint burns the owner's Thingiverse app-token quota and
+      // is only ever called from the dashboard, so it's owner-gated.
+      res.status(401).json({ error: "unauthorized" });
+      return;
+    }
     const token = process.env.THINGIVERSE_TOKEN;
     if (!token) {
       res.status(400).json({ error: "Thingiverse isn't connected yet. Add a THINGIVERSE_TOKEN environment variable with your free Thingiverse App Token, then try again." });
@@ -1130,13 +1227,17 @@ app.get("/api/thingiverse-search", rateLimit("tv", 10, 60 * 60 * 1000), async (r
       const searchUrl = "https://api.thingiverse.com/search/" + encodeURIComponent(q)
         + "?type=things&sort=popular&per_page=" + perPage + "&page=" + page
         + "&access_token=" + encodeURIComponent(token);
-      const sr = await fetch(searchUrl);
+      const sr = await fetchWithTimeout(searchUrl, {}, 20000);
       if (!sr.ok) {
         if (sr.status === 429) {
           throw new Error("Thingiverse's rate limit was hit — wait a few minutes and search again.");
         }
+        // Log the upstream body server-side but never echo it: Thingiverse
+        // error text could conceivably include the request URL (and with
+        // it the access_token), and it would bloat the client response.
         const body = await sr.text().catch(function () { return ""; });
-        throw new Error("Thingiverse search failed (HTTP " + sr.status + "): " + body.slice(0, 300));
+        console.error("Thingiverse upstream error " + sr.status + ": " + body.slice(0, 600));
+        throw new Error("Thingiverse search failed (HTTP " + sr.status + ")");
       }
       const sdata = await sr.json();
       const pageHits = Array.isArray(sdata) ? sdata
@@ -1157,7 +1258,7 @@ app.get("/api/thingiverse-search", rateLimit("tv", 10, 60 * 60 * 1000), async (r
       let detail = hit;
       try {
         const detailUrl = "https://api.thingiverse.com/things/" + id + "?access_token=" + encodeURIComponent(token);
-        const dr = await fetch(detailUrl);
+        const dr = await fetchWithTimeout(detailUrl, {}, 15000);
         if (dr.ok) detail = await dr.json();
       } catch (e) { /* fall back to the search result's own fields */ }
 
