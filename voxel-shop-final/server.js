@@ -138,6 +138,79 @@ function hashToken(token) {
   return crypto.createHash("sha256").update(token).digest("hex");
 }
 
+/* ---------------------------------------------------------
+   Stored credentials use PBKDF2-HMAC-SHA256 with a per-install
+   random salt and an OWASP-recommended iteration count, so the
+   passcode is expensive to crack at rest (a bare SHA-256 — the
+   old format — is fast enough to brute-force offline if the
+   store ever leaked). hashPasscode writes only the new salted
+   form; verifyPasscode accepts both old and new shapes and
+   reports when a match was made against the legacy form so the
+   caller can lift the stored credential to the salted KDF.
+-------------------------------------------------------- */
+const PASSCODE_MIN_LENGTH = 12;
+const PBKDF2_ITERATIONS = 600000; // OWASP 2023 guidance for PBKDF2-HMAC-SHA256
+const PBKDF2_SALT_BYTES = 16;
+const PBKDF2_KEY_BYTES = 32;
+const PASSCODE_HASH_PREFIX = "pbkdf2$";
+
+function hashPasscode(password) {
+  return new Promise(function (resolve, reject) {
+    const salt = crypto.randomBytes(PBKDF2_SALT_BYTES);
+    crypto.pbkdf2(password, salt, PBKDF2_ITERATIONS, PBKDF2_KEY_BYTES, "sha256", function (err, dk) {
+      if (err) { reject(err); return; }
+      // pbkdf2$<iterations>$<salt-hex>$<key-hex>
+      resolve(PASSCODE_HASH_PREFIX + PBKDF2_ITERATIONS + "$" + salt.toString("hex") + "$" + dk.toString("hex"));
+    });
+  });
+}
+
+function verifyPasscode(stored, password) {
+  return new Promise(function (resolve) {
+    if (typeof stored !== "string" || !stored) { resolve({ ok: false, legacy: false }); return; }
+    if (stored.indexOf(PASSCODE_HASH_PREFIX) === 0) {
+      const parts = stored.split("$");
+      if (parts.length !== 4) { resolve({ ok: false, legacy: false }); return; }
+      const iterations = parseInt(parts[1], 10);
+      if (!Number.isFinite(iterations) || iterations < 1 || iterations > 5000000) {
+        resolve({ ok: false, legacy: false });
+        return;
+      }
+      const salt = Buffer.from(parts[2], "hex");
+      const want = Buffer.from(parts[3], "hex");
+      if (salt.length === 0 || want.length === 0) { resolve({ ok: false, legacy: false }); return; }
+      crypto.pbkdf2(password, salt, iterations, want.length, "sha256", function (err, got) {
+        let same = !err && got.length === want.length;
+        if (same) { try { same = crypto.timingSafeEqual(got, want); } catch (e) { same = false; } }
+        resolve({ ok: same, legacy: false });
+      });
+      return;
+    }
+    if (/^[0-9a-f]{64}$/.test(stored)) {
+      // Legacy era: a raw SHA-256 of the passcode, still verified
+      // timing-safe. legacy:true tells the caller this credential
+      // should be upgraded to the salted KDF on a successful match.
+      const candidate = Buffer.from(crypto.createHash("sha256").update(password).digest("hex"));
+      let same = false;
+      try { same = crypto.timingSafeEqual(candidate, Buffer.from(stored)); } catch (e) { same = false; }
+      resolve({ ok: same, legacy: same });
+      return;
+    }
+    resolve({ ok: false, legacy: false });
+  });
+}
+
+// The stored credential to verify against: the salted/modern hash, or
+// (for very old deployments) the readable plaintext hashed the legacy
+// way so verifyPasscode can process it uniformly.
+function storedCredential(stored, sec) {
+  if (sec && typeof sec.passcodeHash === "string") return sec.passcodeHash;
+  if (sec && typeof sec.passcode === "string") {
+    return crypto.createHash("sha256").update(sec.passcode).digest("hex");
+  }
+  return null;
+}
+
 // Admin sessions are persisted in the same shared store that holds the
 // catalog — keyed by a SHA-256 hash of the token, never the raw token.
 // Sessions used to live in memory only, which meant that ANY server
@@ -613,22 +686,30 @@ app.post("/api/storage/:key", async (req, res) => {
       if (stored) {
         incoming.security = incoming.security && typeof incoming.security === "object" ? incoming.security : {};
         if (incoming.security._updatePasscode === true) {
-          // Owner intentionally set a new passcode — keep the incoming
-          // hash, but never the shipped default (that passcode is public
-          // knowledge); the handover flags are server-owned, and marking
-          // them here means the next auth is a normal one. Every OTHER
-          // session is revoked so a long-stolen token dies the moment the
-          // owner rotates the passcode (the current tab stays logged in).
+          // Owner intentionally set a new passcode. The dashboard can't
+          // pre-hash it (the salt lives server-side), so the new value
+          // arrives as plaintext in passcodeNew and is hashed HERE with
+          // the salted KDF ? never the shipped default (that passcode is
+          // public knowledge); the handover flags are server-owned, and
+          // marking them here means the next auth is a normal one. Every
+          // OTHER session is revoked so a long-stolen token dies the
+          // moment the owner rotates the passcode (the current tab stays
+          // logged in).
           delete incoming.security._updatePasscode;
-          const newHash = incoming.security.passcodeHash;
-          if (typeof newHash !== "string" || !PASSCODE_HASH_RE.test(newHash)) {
-            res.status(400).json({ error: "invalid_settings" });
-            return;
-          }
-          if (newHash === SEED_PASSCODE_HASH) {
+          const newPasscode = typeof incoming.security.passcodeNew === "string" ? incoming.security.passcodeNew : "";
+          delete incoming.security.passcodeNew;
+          // The shipped default is public knowledge — refusing it takes
+          // precedence over everything else, even its length.
+          if (newPasscode === "voxel-owner" ||
+              crypto.createHash("sha256").update(newPasscode).digest("hex") === SEED_PASSCODE_HASH) {
             res.status(400).json({ error: "default_passcode_not_allowed" });
             return;
           }
+          if (newPasscode.length < PASSCODE_MIN_LENGTH) {
+            res.status(400).json({ error: "passcode_too_short" });
+            return;
+          }
+          incoming.security.passcodeHash = await hashPasscode(newPasscode);
           incoming.security._setupPending = false;
           incoming.security._passcodeChanged = true;
           passcodeChangedHere = true;
@@ -720,28 +801,17 @@ app.post("/api/auth", rateLimit("auth", 12, 15 * 60 * 1000), async (req, res) =>
     const raw = await storageGet("voxel-settings");
     let stored = null;
     if (raw) { try { stored = JSON.parse(raw); } catch (e) { stored = null; } }
-    let expectedHash = stored && stored.security ? stored.security.passcodeHash : null;
-    // Very old deployments stored the passcode as readable text; accept
-    // that shape too by hashing it here (saving settings again migrates
-    // it to a hash).
-    if (!expectedHash && stored && stored.security && typeof stored.security.passcode === "string") {
-      expectedHash = crypto.createHash("sha256").update(stored.security.passcode).digest("hex");
-    }
-    const candidate = crypto.createHash("sha256").update(password).digest("hex");
-    const matches =
-      typeof expectedHash === "string" &&
-      expectedHash.length === candidate.length &&
-      crypto.timingSafeEqual(Buffer.from(candidate), Buffer.from(expectedHash));
-    if (!matches) {
+    const sec = (stored && stored.security) || {};
+    const verdict = await verifyPasscode(storedCredential(stored, sec), password);
+    if (!verdict.ok) {
       await authJitterDelay();
       noteAuthFailure(ip);
       res.status(401).json({ error: "wrong_passcode" });
       return;
     }
     // Correct passcode, but the stored one is still the one-time setup
-    // code (fresh install, or a legacy default) — no token until the
+    // code (fresh install, or a legacy default) ? no token until the
     // owner has claimed it with a passcode of their own.
-    const sec = (stored && stored.security) || {};
     const setupPending = sec._setupPending === true;
     const legacyDefault = sec.passcodeHash === SEED_PASSCODE_HASH && sec._passcodeChanged !== true;
     if (setupPending || legacyDefault) {
@@ -752,6 +822,17 @@ app.post("/api/auth", rateLimit("auth", 12, 15 * 60 * 1000), async (req, res) =>
       // whatever passcode worked before (usually the original one).
       res.status(403).json({ error: "setup_required", mode: setupPending ? "fresh" : "legacy" });
       return;
+    }
+    // Established install still holding an old-era unsalted hash ? lift
+    // the stored credential to the salted KDF in place. Never done while
+    // the setup/legacy default is active (that exact hash drives the
+    // forced handover above), so detection stays reliable.
+    if (verdict.legacy) {
+      const upgraded = Object.assign({}, stored);
+      upgraded.security = Object.assign({}, sec, { passcodeHash: await hashPasscode(password) });
+      delete upgraded.security.passcode; // migrate any legacy plaintext away
+      try { await storageSet("voxel-settings", JSON.stringify(upgraded)); }
+      catch (e) { console.error("passcode KDF upgrade failed:", e); }
     }
     noteAuthSuccess(ip);
     await authJitterDelay();
@@ -779,9 +860,6 @@ app.post("/api/auth", rateLimit("auth", 12, 15 * 60 * 1000), async (req, res) =>
    server-side; the public read path never sees any hash.
    Same rate limit and failure lockout as /api/auth.
 -------------------------------------------------------- */
-const PASSCODE_MIN_LENGTH = 12;
-const PASSCODE_HASH_RE = /^[0-9a-f]{64}$/;
-
 app.post("/api/auth/change-default", rateLimit("auth", 12, 15 * 60 * 1000), async (req, res) => {
   try {
     const ip = clientIp(req);
@@ -794,6 +872,13 @@ app.post("/api/auth/change-default", rateLimit("auth", 12, 15 * 60 * 1000), asyn
     const next = req.body && typeof req.body.newPassword === "string" ? req.body.newPassword : "";
     if (!current || !next || current.length > 200 || next.length > 200) {
       res.status(400).json({ error: "invalid_request" });
+      return;
+    }
+    // The shipped default is public knowledge — refusing it takes
+    // precedence over everything else, even its length.
+    const nextHash = crypto.createHash("sha256").update(next).digest("hex");
+    if (next === "voxel-owner" || nextHash === SEED_PASSCODE_HASH) {
+      res.status(400).json({ error: "default_passcode_not_allowed" });
       return;
     }
     if (next.length < PASSCODE_MIN_LENGTH) {
@@ -815,22 +900,17 @@ app.post("/api/auth/change-default", rateLimit("auth", 12, 15 * 60 * 1000), asyn
       res.status(403).json({ error: "setup_not_required" });
       return;
     }
-    const currentHash = crypto.createHash("sha256").update(current).digest("hex");
-    if (sec.passcodeHash !== currentHash) {
+    const verdict = await verifyPasscode(storedCredential(stored, sec), current);
+    if (!verdict.ok) {
       await authJitterDelay();
       noteAuthFailure(ip);
       res.status(401).json({ error: "wrong_passcode" });
       return;
     }
-    const nextHash = crypto.createHash("sha256").update(next).digest("hex");
-    if (nextHash === SEED_PASSCODE_HASH) {
-      res.status(400).json({ error: "default_passcode_not_allowed" });
-      return;
-    }
     // Commit the handover, then reissue the session map from scratch.
     const nextSettings = Object.assign({}, stored);
     nextSettings.security = Object.assign({}, sec, {
-      passcodeHash: nextHash,
+      passcodeHash: await hashPasscode(next),
       _setupPending: false,
       _passcodeChanged: true,
     });
@@ -847,6 +927,28 @@ app.post("/api/auth/change-default", rateLimit("auth", 12, 15 * 60 * 1000), asyn
   } catch (e) {
     console.error("change-default failed:", e);
     res.status(500).json({ error: "change_default_failed" });
+  }
+});
+
+/* ---------------------------------------------------------
+   Logout ? revokes the presented admin session token so a
+   leaked/stolen token (or a shared device) can be killed at
+   once instead of persisting for the full 24h TTL. Idempotent:
+   revoking an already-dead token is a no-op success. The tab
+   drops its copy regardless; this endpoint makes the server
+   side die too, so the token can't be replayed from anywhere.
+-------------------------------------------------------- */
+app.post("/api/auth/logout", rateLimit("auth", 60, 15 * 60 * 1000), async (req, res) => {
+  try {
+    const token = req.headers["x-voxel-token"];
+    if (token && typeof token === "string") {
+      adminSessions.delete(hashToken(token));
+      await persistSessions();
+    }
+    res.json({ ok: true });
+  } catch (e) {
+    console.error("logout failed:", e);
+    res.status(500).json({ error: "logout_failed" });
   }
 });
 

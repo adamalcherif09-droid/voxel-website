@@ -1155,21 +1155,30 @@ function AdminSettings(props) {
     var value = (passcode || "").trim();
     if (!value) return;
     if (value.length < 12) { flashSec("New passcode must be at least 12 characters."); return; }
-    if (value.toLowerCase() === "voxel-owner") { flashSec("That's the well-known default passcode — please choose your own."); return; }
+    if (value.toLowerCase() === "voxel-owner") { flashSec("That's the well-known default passcode ? please choose your own."); return; }
     setSavingPasscode(true);
-    sha256(value).then(function (hash) {
+    // The server mixes in a per-install salt and a deliberately slow KDF,
+    // so only it can hash the passcode ? the plaintext exists only inside
+    // this POST body and is never stored or echoed back. _updatePasscode
+    // tells the server this is an intentional change; without it, a plain
+    // round-trip preserves the stored credential, because the dashboard
+    // never receives the current hash back (it's stripped from public
+    // reads for safety).
+    props.updateSettings(function (prev) {
+      var next = Object.assign({}, prev);
+      next.security = Object.assign({}, prev.security || DEFAULT_SECURITY, { passcodeNew: value, _updatePasscode: true });
+      return next;
+    }).then(function (ok) {
+      // Only acknowledge once the server has CONFIRMED the write (and
+      // hashed with its KDF work factor) — "Passcode updated." before
+      // that would be a lie if the save were still in flight. guardedSave
+      // already alerts about failures, so a false result leaves the field
+      // intact for the owner to retry.
       setSavingPasscode(false);
-      props.updateSettings(function (prev) {
-        var next = Object.assign({}, prev);
-        // _updatePasscode tells the server this hash is an intentional
-        // change — without it the server preserves the stored one,
-        // because the dashboard never receives the current hash back
-        // (it's stripped from public reads for safety).
-        next.security = Object.assign({}, prev.security || DEFAULT_SECURITY, { passcodeHash: hash, _updatePasscode: true });
-        return next;
-      });
-      setPasscode("");
-      flashSec("Passcode updated.");
+      if (ok) {
+        setPasscode("");
+        flashSec("Passcode updated.");
+      }
     });
   }
   function saveWebhook() {
@@ -1353,6 +1362,14 @@ function AdminView(props) {
           <h2 className="font-display text-2xl" style={{ color: "var(--ink)" }}>{content.businessName} dashboard</h2>
         </div>
         <SecondaryButton onClick={props.goHome}>View shop</SecondaryButton>
+      </div>
+
+      <div className="flex items-center gap-2 mb-8">
+        <button onClick={props.onSignOut} className="px-3 py-1.5 text-xs cursor-pointer border-0 rounded-full"
+          style={{ background: "transparent", color: "var(--ink-dim)", border: "1px solid var(--line)" }}>
+          Sign out — end this session
+        </button>
+        <span className="text-xs" style={{ color: "var(--ink-dim)" }}>Revokes the dashboard token on the server; re-enter via the footer gate to get back in.</span>
       </div>
 
       <div className="flex gap-2 mb-8 flex-wrap" style={{ borderBottom: "1px solid var(--line)" }}>

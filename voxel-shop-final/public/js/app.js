@@ -234,6 +234,17 @@ function App() {
     }
   }
 
+  function handleLogout() {
+    // Kill the session server-side too, so a token that got out (this
+    // or another tab) can't be replayed anywhere else. Leaving the
+    // dashboard local-first keeps it instant even if the network dies.
+    apiLogout().catch(function () {});
+    setAdminApiToken("");
+    setIsAdmin(false);
+    setView("admin-gate");
+    setReauthHint(false);
+  }
+
   if (loadError) {
     return (
       <div className="voxel-root">
@@ -267,7 +278,7 @@ function App() {
           <AdminView tab={adminTab} setTab={setAdminTab} inquiries={inquiries}
             categories={categories} models={models} addCategory={addCategory} renameCategory={renameCategory} deleteCategory={deleteCategory}
             addModel={addModel} updateModel={updateModel} deleteModel={deleteModel} toggleFeatured={toggleFeatured} importModels={importModels}
-            settings={settings} updateSettings={persistSettings} content={content} updateContent={persistContent} goHome={goHome} />
+            settings={settings} updateSettings={persistSettings} content={content} updateContent={persistContent} goHome={goHome} onSignOut={handleLogout} />
         )}
       </main>
       <Footer content={content} security={settings.security || DEFAULT_SECURITY} onTrigger={handleFooterTrigger} />

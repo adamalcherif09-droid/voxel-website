@@ -173,13 +173,6 @@ function buildTelUrl(phone) {
 --------------------------------------------------------- */
 var COMBO_SHAPES = ["circle", "square", "triangle", "diamond", "star", "hexagon"];
 
-// One-way hash so the passcode itself is never stored anywhere.
-function sha256(str) {
-  return crypto.subtle.digest("SHA-256", new TextEncoder().encode(str)).then(function (buf) {
-    return Array.from(new Uint8Array(buf)).map(function (b) { return b.toString(16).padStart(2, "0"); }).join("");
-  });
-}
-
 var DEFAULT_SECURITY = {
   triggerClicks: 5,
   combo: ["circle", "triangle", "square", "diamond"],
@@ -225,6 +218,18 @@ function setAdminApiToken(token) {
   } catch (e) { /* storage unavailable — token just lives in memory */ }
 }
 function getAdminApiToken() { return adminApiToken; }
+
+// Revokes this tab's admin session on the server, so a token someone
+// walked off with dies immediately instead of living out its 24h TTL.
+// Fire-and-forget from the caller's point of view: even if the request
+// fails the local copy is still dropped on the next line.
+function apiLogout() {
+  return fetch("/api/auth/logout", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "x-voxel-token": adminApiToken || "" },
+  }).then(function (r) { return r.status >= 200 && r.status < 300; })
+    .catch(function () { return false; });
+}
 
 // Exchanges the raw passcode for a short-lived server-side admin
 // session. Returns the token, or null if the server couldn't be
