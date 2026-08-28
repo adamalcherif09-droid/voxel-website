@@ -1139,17 +1139,24 @@ function AdminSettings(props) {
       var next = Object.assign({}, prev);
       next.security = Object.assign({}, prev.security || DEFAULT_SECURITY, { combo: comboBuilder });
       return next;
+    }).then(function (ok) {
+      // Only acknowledge once the server confirmed the write — a failed
+      // save must not flash "Combination updated." (guardedSave already
+      // alerts about failures and re-routes the 401 re-gate path).
+      if (ok) {
+        setComboBuilder([]);
+        flashSec("Combination updated.");
+      }
     });
-    setComboBuilder([]);
-    flashSec("Combination updated.");
   }
   function saveTrigger() {
     props.updateSettings(function (prev) {
       var next = Object.assign({}, prev);
       next.security = Object.assign({}, prev.security || DEFAULT_SECURITY, { triggerClicks: Number(triggerClicks) || 5 });
       return next;
+    }).then(function (ok) {
+      if (ok) flashSec("Click count updated.");
     });
-    flashSec("Click count updated.");
   }
   function savePasscode() {
     var value = (passcode || "").trim();
@@ -1182,18 +1189,26 @@ function AdminSettings(props) {
     });
   }
   function saveWebhook() {
+    // Clearing the field while a webhook is saved REMOVES it (the old
+    // code only ever replaced — the Save button was disabled on an empty
+    // field, so a webhook, once set, could never be turned off again).
+    var removing = webhookSet && !webhookUrl.trim();
+    var value = removing ? "" : webhookUrl.trim();
     props.updateSettings(function (prev) {
       var next = Object.assign({}, prev);
       // _updateWebhook tells the server this URL is an intentional
       // change — the current URL is never sent back to the browser,
       // so the server preserves it unless this flag is set.
       next._updateWebhook = true;
-      next.webhookUrl = webhookUrl;
+      next.webhookUrl = value;
       return next;
+    }).then(function (ok) {
+      if (ok) {
+        setWebhookSet(!removing);
+        setWebhookUrl("");
+        flashSec(removing ? "Webhook removed." : "Webhook saved — it stays hidden from the site.");
+      }
     });
-    setWebhookSet(true);
-    setWebhookUrl("");
-    flashSec("Webhook saved — it stays hidden from the site.");
   }
   function savePricing() {
     props.updateSettings(function (prev) {
@@ -1205,9 +1220,12 @@ function AdminSettings(props) {
         laborRate: Math.max(0, Number(laborRate) || 0),
       };
       return next;
+    }).then(function (ok) {
+      if (ok) {
+        setPricingMsg("Saved — new models will use these rates from now on. Anything already in your catalog keeps its existing price.");
+        setTimeout(function () { setPricingMsg(""); }, 4000);
+      }
     });
-    setPricingMsg("Saved — new models will use these rates from now on. Anything already in your catalog keeps its existing price.");
-    setTimeout(function () { setPricingMsg(""); }, 4000);
   }
   function testPing() {
     apiPingDiscord("This is a test ping from your website.").then(function (ok) {
@@ -1299,12 +1317,12 @@ function AdminSettings(props) {
         </p>
         {(webhookSet || webhookUrl) && (
           <p className="text-xs mb-2 font-mono-ac" style={{ color: "var(--teal)" }}>
-            {webhookSet ? "A webhook is saved and hidden. Paste a new link below to replace it, or test it as-is." : ""}
+            {webhookSet ? "A webhook is saved and hidden. Paste a new link below to replace it, leave it empty and save to remove it, or test it as-is." : ""}
           </p>
         )}
         <div className="flex gap-2">
-          <input value={webhookUrl} onChange={function (e) { setWebhookUrl(e.target.value); }} placeholder={webhookSet ? "Saved — paste a new link to replace" : "https://discord.com/api/webhooks/..."} className="flex-1 px-3.5 py-2.5 rounded-md text-sm font-mono-ac" style={{ background: "var(--panel)", border: "1px solid var(--line)", color: "var(--ink)" }} />
-          <SecondaryButton onClick={saveWebhook} disabled={!webhookUrl.trim()}>Save</SecondaryButton>
+          <input value={webhookUrl} onChange={function (e) { setWebhookUrl(e.target.value); }} placeholder={webhookSet ? "Saved — paste a new link to replace, or leave empty and save to remove" : "https://discord.com/api/webhooks/..."} className="flex-1 px-3.5 py-2.5 rounded-md text-sm font-mono-ac" style={{ background: "var(--panel)", border: "1px solid var(--line)", color: "var(--ink)" }} />
+          <SecondaryButton onClick={saveWebhook} disabled={!webhookUrl.trim() && !webhookSet}>{webhookSet && !webhookUrl.trim() ? "Remove" : "Save"}</SecondaryButton>
         </div>
         <div className="flex items-center gap-3 mt-3">
           <SecondaryButton onClick={testPing} icon={Send}>Send test ping</SecondaryButton>

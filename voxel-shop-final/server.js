@@ -938,7 +938,11 @@ app.post("/api/auth/change-default", rateLimit("auth", 12, 15 * 60 * 1000), asyn
    drops its copy regardless; this endpoint makes the server
    side die too, so the token can't be replayed from anywhere.
 -------------------------------------------------------- */
-app.post("/api/auth/logout", rateLimit("auth", 60, 15 * 60 * 1000), async (req, res) => {
+// Logout revokes a bearer token — nothing password-ish to protect, so it
+// gets its OWN bucket. Sharing the "auth" bucket would let cheap logout
+// calls consume the same 15-minute login budget (and the owner's own
+// dashboard sign-out would silently eat one of their 12 login attempts).
+app.post("/api/auth/logout", rateLimit("logout", 60, 15 * 60 * 1000), async (req, res) => {
   try {
     const token = req.headers["x-voxel-token"];
     if (token && typeof token === "string") {
