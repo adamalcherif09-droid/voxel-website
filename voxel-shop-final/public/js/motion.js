@@ -791,11 +791,12 @@
         if (i < 0 || i >= FILM_FRAMES || frames[i]) return;
         var img = new Image();
         img.onload = function () { scheduleTick(); }; // newly arrived frame may be the one on screen
-        // The frame files are f01.jpg .. f64.jpg; index 0 maps to f01,
+        // The frame files are f01.webp .. f64.webp; index 0 maps to f01,
         // index 63 to f64 — the frames were named starting at f01, so
         // loading "f" + i would have burned index 0 on a 404 and never
-        // shown the final frame.
-        img.src = "/media/film/f" + pad(i + 1) + ".jpg";
+        // shown the final frame. WebP halves the page weight vs the JPG
+        // set (the .jpg originals stay on disk for the download-all ZIP).
+        img.src = "/media/film/f" + pad(i + 1) + ".webp";
         frames[i] = img;
       }
       var i;
