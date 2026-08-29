@@ -779,6 +779,7 @@
           current += delta * 0.35; // buttery catch-up toward the scroll target
           if (Math.abs(want - current) < 0.25) current = want;
         }
+        ensureNear(want); // prefetch the band the scrub is heading into
         if (Math.round(current) !== Math.round(lastDrawn)) draw();
         if (Math.abs(want - current) >= 0.25) rafId = requestAnimationFrame(tick);
       }
@@ -799,9 +800,34 @@
         img.src = "/media/film/f" + pad(i + 1) + ".webp";
         frames[i] = img;
       }
-      var i;
+      var i, fine = [];
       for (i = 0; i < FILM_FRAMES; i += 8) load(i); // coarse pass: instant full-range scrubbing
-      for (i = 0; i < FILM_FRAMES; i++) load(i);    // fine pass: fills in everything else
+      for (i = 0; i < FILM_FRAMES; i++) if (!frames[i]) fine.push(i);
+      // The wide pass (all 56 remaining frames) used to fire all at once,
+      // competing with the fonts/CSS/text for the single server's round
+      // trips on first paint. Fill it in tiny throttled batches AFTER the
+      // page is interactive, and prefetch only the band around wherever
+      // the scrub actually is. Saves nothing overall, but the film paints
+      // within a frame or two instead of waiting on the whole 8MB set.
+      var fineIdx = 0, filling = false;
+      function fillFine() {
+        if (filling) return;
+        filling = true;
+        var step = function () {
+          var tries = 0;
+          while (fineIdx < fine.length && tries < 2) { load(fine[fineIdx++]); tries++; }
+          if (fineIdx < fine.length) setTimeout(step, 120);
+          else filling = false;
+        };
+        step();
+      }
+      function ensureNear(i) {
+        var k = Math.max(1, Math.min(6, Math.round(window.innerWidth * 0.006)));
+        var a = Math.max(0, Math.round(i) - k), b = Math.min(FILM_FRAMES - 1, Math.round(i) + k);
+        for (var n = a; n <= b; n++) load(n);
+      }
+      if (document.readyState === "complete") fillFine();
+      else window.addEventListener("load", fillFine, { once: true });
 
       window.addEventListener("scroll", scheduleTick, { passive: true });
       window.addEventListener("resize", function () { resize(); scheduleTick(); }, { passive: true });
