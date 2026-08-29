@@ -45,36 +45,64 @@ function AdminGate(props) {
     // The server is the single source of truth for the passcode — it
     // verifies and returns a short-lived admin session token. The hash
     // is never shipped to browsers, so it can't be brute-forced offline.
-    apiAuthDetailed(pw).then(function (r) {
-      setChecking(false);
-      if (r && r.token) {
-        setAdminApiToken(r.token);
+    apiAuthDetailed(pw)
+      .then(function (r) {
+        setChecking(false);
+        if (r && r.token) {
+          setAdminApiToken(r.token);
+          setPw("");
+          props.onSuccess();
+          return;
+        }
+        if (r && r.status === 403 && r.error === "setup_required") {
+          // The stored passcode is still the one-time setup code (fresh
+          // install) or the public default (legacy install). Route to the
+          // forced handover screen; tell it which voice to use.
+          setPw("");
+          setAttempts(0);
+          setSetupMode(r.mode === "legacy" ? "legacy" : "fresh");
+          setStage("setup");
+          return;
+        }
+        if (r && r.status === 429) {
+          // Lockout / rate limit (slammed by retries or someone probing
+          // the door). A "wrong passcode" counter here would mislead the
+          // owner into more attempts and dig the lockout deeper. Surface
+          // the server's cooldown and re-arm the button.
+          setPw("");
+          setError(
+            r.retryAfterSec
+              ? "Too many attempts — wait about " +
+                  Math.max(1, Math.ceil(r.retryAfterSec / 60)) +
+                  " min and try again."
+              : "Too many attempts — wait a minute and try again."
+          );
+          return;
+        }
+        if (r && r.status === 0) {
+          // Request dead-ended — server stalled, is cold-starting, or the
+          // network dropped it. Not a wrong passcode: don't burn an
+          // attempt, don't change the stage.
+          setError("Couldn't reach the server right now — try again in a moment.");
+          return;
+        }
+        var nextAttempts = attempts + 1;
         setPw("");
-        props.onSuccess();
-        return;
-      }
-      if (r && r.status === 403 && r.error === "setup_required") {
-        // The stored passcode is still the one-time setup code (fresh
-        // install) or the public default (legacy install). Route to the
-        // forced handover screen; tell it which voice to use.
-        setPw("");
-        setAttempts(0);
-        setSetupMode(r.mode === "legacy" ? "legacy" : "fresh");
-        setStage("setup");
-        return;
-      }
-      var nextAttempts = attempts + 1;
-      setPw("");
-      if (nextAttempts >= 3) {
-        setAttempts(0);
-        setStage("combo");
-        setComboProgress([]);
-        setError("");
-      } else {
-        setAttempts(nextAttempts);
-        setError(nextAttempts + " of 3");
-      }
-    });
+        if (nextAttempts >= 3) {
+          setAttempts(0);
+          setStage("combo");
+          setComboProgress([]);
+          setError("");
+        } else {
+          setAttempts(nextAttempts);
+          setError(nextAttempts + " of 3");
+        }
+      })
+      .catch(function () {
+        // Whatever threw, never leave the button stuck on "Checking…".
+        setChecking(false);
+        setError("Something went wrong — try again in a moment.");
+      });
   }
 
   function submitSetup() {
@@ -94,15 +122,20 @@ function AdminGate(props) {
     }
     setSetupChecking(true);
     setSetupError("");
+    var ctrl = (typeof AbortController !== "undefined") ? new AbortController() : null;
+    var timer = ctrl ? setTimeout(function () { ctrl.abort(); }, 15000) : null;
+    var clearTimer = function () { if (timer) { clearTimeout(timer); timer = null; } };
     fetch("/api/auth/change-default", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ current: setupCurrent, newPassword: trimmed }),
+      signal: ctrl ? ctrl.signal : undefined,
     })
       .then(function (res) {
         return res.json().catch(function () { return {}; }).then(function (json) { return { status: res.status, json: json }; });
       })
       .then(function (r) {
+        clearTimer();
         setSetupChecking(false);
         if (r.json && r.json.token) {
           setAdminApiToken(r.json.token);
@@ -116,13 +149,16 @@ function AdminGate(props) {
         else if (r.status === 400 && r.json.error === "default_passcode_not_allowed") msg = "That's the well-known default passcode — please choose your own.";
         else if (r.status === 400 && r.json.error === "passcode_must_differ") msg = "The new passcode must be different from the setup one.";
         else if (r.status === 401 && r.json.error === "wrong_passcode") msg = setupMode === "legacy" ? "The current passcode isn't right — try the one that worked before, usually the original starter one." : "The setup passcode isn't right — check the one printed in the server log.";
-        else if (r.status === 429) msg = "Too many attempts — wait a minute and try again.";
+        else if (r.status === 429) msg = r.json.retryAfterSec ? "Too many attempts — wait about " + Math.max(1, Math.ceil(r.json.retryAfterSec / 60)) + " min and try again." : "Too many attempts — wait a minute and try again.";
         else msg = "Couldn't finish setup right now. Reload the page and try the door again.";
         setSetupError(msg);
       })
       .catch(function () {
+        // Timed out (abort), network error, or an unexpected throw — in
+        // every case put the button back instead of stranding it.
+        clearTimer();
         setSetupChecking(false);
-        setSetupError("Couldn't reach the server — check your connection and try again.");
+        setSetupError("Couldn't reach the server (it may be waking up) — try again in a moment.");
       });
   }
 

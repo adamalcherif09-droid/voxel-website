@@ -250,19 +250,27 @@ function apiAuth(password) {
 
 // Like apiAuth, but keeps the HTTP status and the server's error code
 // so a caller can tell "wrong passcode" from "this is a fresh install
-// that still needs its one-time setup" (403 setup_required).
+// that still needs its one-time setup" (403 setup_required). Also arms
+// a hard deadline so a stalled server (Render's free tier cold-starts a
+// sleeping instance — that first request can sit for a while) can never
+// freeze a UI button on "Checking…".
 function apiAuthDetailed(password) {
+  var ctrl = (typeof AbortController !== "undefined") ? new AbortController() : null;
+  var timer = ctrl ? setTimeout(function () { ctrl.abort(); }, 15000) : null;
+  var clearTimer = function () { if (timer) { clearTimeout(timer); timer = null; } };
   return fetch("/api/auth", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ password: password }),
+    signal: ctrl ? ctrl.signal : undefined,
   })
     .then(function (res) {
       return res.json().catch(function () { return {}; }).then(function (json) {
-        return { status: res.status, ok: res.ok, token: json.token || null, error: json.error || null, mode: json.mode || null };
+        clearTimer();
+        return { status: res.status, ok: res.ok, token: json.token || null, error: json.error || null, mode: json.mode || null, retryAfterSec: json.retryAfterSec || null };
       });
     })
-    .catch(function () { return { status: 0, ok: false, token: null, error: "network" }; });
+    .catch(function () { clearTimer(); return { status: 0, ok: false, token: null, error: "network", retryAfterSec: null }; });
 }
 
 // Resolves to { ok: true, value: parsedValueOrNullOrCorruptFlaggedFalse }
