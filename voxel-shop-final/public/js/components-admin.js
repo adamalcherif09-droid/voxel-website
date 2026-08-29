@@ -1276,6 +1276,34 @@ function AdminSettings(props) {
       setTimeout(function () { setPingSent(false); }, 3000);
     });
   }
+  var _filmZipNote = React.useState(""); var filmZipNote = _filmZipNote[0]; var setFilmZipNote = _filmZipNote[1];
+  var _filmZipErr = React.useState(false); var filmZipErr = _filmZipErr[0]; var setFilmZipErr = _filmZipErr[1];
+  function downloadFilmZip() {
+    setFilmZipNote("");
+    setFilmZipErr(false);
+    fetch("/api/media/film-archive", { headers: { "x-voxel-token": getAdminApiToken() || "" } })
+      .then(function (r) {
+        if (!r.ok) throw new Error(String(r.status));
+        return r.blob();
+      })
+      .then(function (blob) {
+        // Same "download this exact thing" trick as everywhere else:
+        // make a temporary object URL, click a hidden anchor, clean up.
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement("a");
+        a.href = url;
+        a.download = "voxel-film-frames.zip";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(function () { URL.revokeObjectURL(url); }, 5000);
+        setFilmZipNote("Downloading voxel-film-frames.zip");
+      })
+      .catch(function () {
+        setFilmZipErr(true);
+        setFilmZipNote("Couldn't build the ZIP — try again in a moment.");
+      });
+  }
 
   return (
     <div className="flex flex-col gap-12 max-w-xl">
@@ -1370,6 +1398,17 @@ function AdminSettings(props) {
         <div className="flex items-center gap-3 mt-3">
           <SecondaryButton onClick={testPing} icon={Send}>Send test ping</SecondaryButton>
           {pingSent && <span className="text-xs" style={{ color: "var(--teal)" }}>Sent — check Discord.</span>}
+        </div>
+      </section>
+
+      <section>
+        <h3 className="font-display text-lg mb-2" style={{ color: "var(--ink)" }}>Background photos</h3>
+        <p className="text-sm mb-4" style={{ color: "var(--ink-dim)" }}>
+          The 64 frames that play behind the shop as you scroll are plain files in the film folder — grab every one at once. Handy for keeping a local copy, previewing, or running the full set through an upscaler in a single pass.
+        </p>
+        <div className="flex items-center gap-3">
+          <SecondaryButton onClick={downloadFilmZip} icon={Download}>Download all background photos (ZIP)</SecondaryButton>
+          {filmZipNote && <span className="text-xs" style={{ color: filmZipErr ? "var(--danger)" : "var(--teal)" }}>{filmZipNote}</span>}
         </div>
       </section>
 

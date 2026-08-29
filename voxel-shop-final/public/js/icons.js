@@ -182,6 +182,16 @@ function Send(props) {
   );
 }
 
+function Download(props) {
+  return (
+    <IconBase {...props}>
+      <polyline points="12,3 12,15" />
+      <polyline points="7,10 12,15 17,10" />
+      <path d="M4 19 L20 19" />
+    </IconBase>
+  );
+}
+
 function TypeIcon(props) {
   return (
     <IconBase {...props}>

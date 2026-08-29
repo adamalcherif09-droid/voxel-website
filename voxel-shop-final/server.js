@@ -2,6 +2,7 @@ const express = require("express");
 const path = require("path");
 const fs = require("fs");
 const crypto = require("crypto");
+const zlib = require("zlib");
 const compression = require("compression");
 
 const app = express();
@@ -1303,6 +1304,73 @@ app.get("/api/thingiverse-search", rateLimit("tv", 10, 60 * 60 * 1000), async (r
 
 // Unknown /api/* paths answer with JSON, not the SPA fallback —
 // an API client should never receive HTML from this server.
+const ZIP_CRC_TABLE = (function () {
+  const t = new Int32Array(256);
+  for (let n = 0; n < 256; n++) {
+    let c = n;
+    for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+    t[n] = c;
+  }
+  return t;
+})();
+function zipCrc32(buf) {
+  let c = 0xffffffff;
+  for (let i = 0; i < buf.length; i++) c = ZIP_CRC_TABLE[(c ^ buf[i]) & 0xff] ^ (c >>> 8);
+  return (c ^ 0xffffffff) >>> 0;
+}
+// A dependency-free ZIP writer (stored + deflate) so the owner can grab
+// every film frame in one click for local reference or AI upscaling.
+function buildZip(entries) {
+  const localParts = [];
+  const centralParts = [];
+  let offset = 0;
+  for (const e of entries) {
+    const nameBuf = Buffer.from(e.name, "utf8");
+    const crc = zipCrc32(e.data);
+    const comp = zlib.deflateRawSync(e.data, { level: 6 });
+    const csize = comp.length, usize = e.data.length;
+    const lh = Buffer.alloc(30);
+    lh.writeUInt32LE(0x04034b50, 0);
+    lh.writeUInt16LE(20, 4); lh.writeUInt16LE(0x0800, 6); lh.writeUInt16LE(8, 8); // deflate
+    lh.writeUInt32LE(crc, 14);
+    lh.writeUInt32LE(csize, 18); lh.writeUInt32LE(usize, 22);
+    lh.writeUInt16LE(nameBuf.length, 26); lh.writeUInt16LE(0, 28);
+    localParts.push(lh, nameBuf, comp);
+    const ch = Buffer.alloc(46);
+    ch.writeUInt32LE(0x02014b50, 0);
+    ch.writeUInt16LE(20, 4); ch.writeUInt16LE(20, 6); ch.writeUInt16LE(0x0800, 8); ch.writeUInt16LE(8, 10);
+    ch.writeUInt32LE(crc, 16); ch.writeUInt32LE(csize, 20); ch.writeUInt32LE(usize, 24);
+    ch.writeUInt16LE(nameBuf.length, 28); ch.writeUInt32LE(0, 30); ch.writeUInt32LE(0, 34); ch.writeUInt32LE(0, 38);
+    ch.writeUInt32LE(offset, 42);
+    centralParts.push(ch, nameBuf);
+    offset += 30 + nameBuf.length + csize;
+  }
+  const cd = Buffer.concat(centralParts);
+  const eocd = Buffer.alloc(22);
+  eocd.writeUInt32LE(0x06054b50, 0);
+  eocd.writeUInt16LE(entries.length, 8); eocd.writeUInt16LE(entries.length, 10);
+  eocd.writeUInt32LE(cd.length, 12); eocd.writeUInt32LE(offset, 16); eocd.writeUInt16LE(0, 20);
+  return Buffer.concat(localParts.concat([cd, eocd]));
+}
+// One click = every background film frame as a ZIP. Owner-only: it's a
+// way to pull the full media set locally (Upscayl, previews, backups),
+// and the frames travel as files, so the archive endpoint re-reads them
+// from disk on demand instead of trusting any client-supplied paths.
+app.get("/api/media/film-archive", rateLimit("filmzip", 30, 60 * 60 * 1000), (req, res) => {
+  if (!isAuthedAdmin(req)) return res.status(401).json({ error: "unauthorized" });
+  const dir = (process.env.VOXEL_MEDIA_DIR || path.join(__dirname, "public", "media")) + path.sep + "film";
+  let names;
+  try { names = fs.readdirSync(dir).filter((n) => /^f\d{2}\.jpg$/.test(n)).sort(); } catch (e) { return res.status(404).json({ error: "no_film_frames" }); }
+  const entries = [];
+  for (const n of names) {
+    try { entries.push({ name: n, data: fs.readFileSync(path.join(dir, n)) }); } catch (e) {}
+  }
+  if (!entries.length) return res.status(404).json({ error: "no_film_frames" });
+  res.setHeader("Content-Type", "application/zip");
+  res.setHeader("Content-Disposition", 'attachment; filename="voxel-film-frames.zip"');
+  res.setHeader("Cache-Control", "no-store");
+  res.send(buildZip(entries));
+});
 app.use("/api", (req, res) => {
   res.status(404).json({ error: "not_found" });
 });
