@@ -107,21 +107,19 @@ function ModelCard(props) {
           <ImageIcon size={26} style={{ color: "var(--ink-dim)" }} />
         )}
         {isNew && <span className="voxel-new-badge voxel-new-badge--absolute font-mono-ac">New</span>}
-        {model.price ? (
-          <button
-            onClick={function (e) { e.stopPropagation(); props.onAddToCart(); }}
-            aria-label={"Add " + model.name + " to cart"}
-            title="Add to cart"
-            className="voxel-tilt cursor-pointer border-0"
-            style={{
-              position: "absolute", top: 10, right: 10, width: 34, height: 34, borderRadius: 17,
-              background: "rgba(22,22,24,0.65)", color: "#f2ece5",
-              display: "flex", alignItems: "center", justifyContent: "center", backdropFilter: "blur(2px)",
-            }}
-          >
-            <ShoppingBag size={17} />
-          </button>
-        ) : null}
+        <button
+          onClick={function (e) { e.stopPropagation(); props.onAddToCart(); }}
+          aria-label={"Add " + model.name + " to cart"}
+          title="Add to cart"
+          className="voxel-tilt cursor-pointer border-0"
+          style={{
+            position: "absolute", top: 10, right: 10, width: 34, height: 34, borderRadius: 17,
+            background: "rgba(22,22,24,0.65)", color: "#f2ece5",
+            display: "flex", alignItems: "center", justifyContent: "center", backdropFilter: "blur(2px)",
+          }}
+        >
+          <ShoppingBag size={17} />
+        </button>
       </div>
       <div className="p-3 sm:p-4 flex flex-col flex-1">
         <div className="flex items-start justify-between gap-2">
@@ -469,11 +467,9 @@ function ModelDetailPopup(props) {
             {model.price ? formatPriceDisplay(model.price, content) : "Ask for price"}
           </div>
           <div className="flex flex-col sm:flex-row gap-3">
-            {model.price ? (
-              <div className="flex-1">
-                <SecondaryButton className="w-full" icon={ShoppingBag} onClick={props.onAddToCart}>Add to cart</SecondaryButton>
-              </div>
-            ) : null}
+            <div className="flex-1">
+              <SecondaryButton className="w-full" icon={ShoppingBag} onClick={props.onAddToCart}>Add to cart</SecondaryButton>
+            </div>
             <div className="flex-1">
               <PrimaryButton className="w-full" onClick={props.onOrder}>Order now</PrimaryButton>
             </div>
@@ -623,6 +619,7 @@ function OrderContactPopup(props) {
 function QuickAddPopup(props) {
   var model = props.model;
   var content = props.content;
+  var priced = Number(model.price) > 0;
   var _qty = React.useState(1); var qty = _qty[0]; var setQty = _qty[1];
   React.useEffect(function () {
     function onKey(e) { if (e.key === "Escape") props.onClose(); }
@@ -646,7 +643,7 @@ function QuickAddPopup(props) {
           <div className="flex flex-col justify-center flex-1" style={{ minWidth: 0 }}>
             <div className="font-display text-base" style={{ color: "var(--ink)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{model.name}</div>
             <div className="font-mono-ac text-sm mt-1" style={{ color: "var(--ink)" }}>
-              {formatPriceDisplay(model.price, content)}
+              {priced ? formatPriceDisplay(model.price, content) : "Ask for price"}
             </div>
           </div>
         </div>
@@ -675,7 +672,7 @@ function QuickAddPopup(props) {
           </div>
           <div className="flex items-center justify-between mt-4 text-sm" style={{ color: "var(--ink)" }}>
             <span style={{ color: "var(--ink-dim)" }}>Total</span>
-            <span className="font-mono-ac">{content.currencySymbol + (Number(model.price || 0) * qty).toFixed(2)}</span>
+            <span className="font-mono-ac">{priced ? content.currencySymbol + (Number(model.price) * qty).toFixed(2) : "Ask for price"}</span>
           </div>
           <div className="mt-4">
             <PrimaryButton className="w-full" onClick={function () { props.onAdd(model, qty); }}>Add to cart</PrimaryButton>
@@ -691,6 +688,8 @@ function CartDrawer(props) {
   var items = props.items;
   var content = props.content;
   var totalUsd = cartSubtotalUsd(items);
+  var pricedItems = items.filter(function (it) { return Number(it.price) > 0; });
+  var pendingItems = items.length - pricedItems.length;
   React.useEffect(function () {
     if (!props.open) return;
     function onKey(e) { if (e.key === "Escape") props.onClose(); }
@@ -746,7 +745,7 @@ function CartDrawer(props) {
                     </div>
                     <div className="flex-1" style={{ minWidth: 0 }}>
                       <div className="text-sm" style={{ color: "var(--ink)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{it.name}</div>
-                      <div className="font-mono-ac text-xs" style={{ color: "var(--ink-dim)", marginTop: 2 }}>{content.currencySymbol + (Number(it.price) || 0).toFixed(2)} each</div>
+                      <div className="font-mono-ac text-xs" style={{ color: "var(--ink-dim)", marginTop: 2 }}>{Number(it.price) > 0 ? content.currencySymbol + Number(it.price).toFixed(2) + " each" : "Price to confirm"}</div>
                       <div className="flex items-center gap-2 mt-1.5">
                         <button
                           onClick={function () { props.onChangeQty(it.modelId, -1); }}
@@ -771,7 +770,7 @@ function CartDrawer(props) {
                       <button onClick={function () { props.onRemove(it.modelId); }} aria-label={"Remove " + it.name + " from cart"} className="cursor-pointer border-0 bg-transparent" style={{ color: "var(--danger)" }}>
                         <Trash2 size={14} />
                       </button>
-                      <span className="font-mono-ac text-xs" style={{ color: "var(--ink)" }}>{content.currencySymbol + ((Number(it.price) || 0) * it.qty).toFixed(2)}</span>
+                      <span className="font-mono-ac text-xs" style={{ color: "var(--ink)" }}>{Number(it.price) > 0 ? content.currencySymbol + ((Number(it.price) || 0) * it.qty).toFixed(2) : "Ask for price"}</span>
                     </div>
                   </li>
                 );
@@ -784,8 +783,11 @@ function CartDrawer(props) {
           <div className="px-5 py-4 flex flex-col gap-3" style={{ borderTop: "1px solid var(--line)", background: "var(--panel)" }}>
             <div className="flex items-center justify-between">
               <span className="text-sm" style={{ color: "var(--ink-dim)" }}>Subtotal</span>
-              <span className="font-mono-ac text-base" style={{ color: "var(--ink)" }}>{formatPriceDisplay(totalUsd, content)}</span>
+              <span className="font-mono-ac text-base" style={{ color: "var(--ink)" }}>{pricedItems.length > 0 ? formatPriceDisplay(totalUsd, content) : "Ask for price"}</span>
             </div>
+            {pendingItems > 0 && pricedItems.length > 0 && (
+              <p className="text-xs" style={{ color: "var(--ink-dim)" }}>+ price to be confirmed for {pendingItems} item{pendingItems > 1 ? "s" : ""}</p>
+            )}
             <p className="text-xs" style={{ color: "var(--ink-dim)" }}>Shipping is confirmed when you message — you only pay after agreeing on the details, no upfront payment.</p>
             {props.checkoutUrl ? (
               <a

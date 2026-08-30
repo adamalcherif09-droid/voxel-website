@@ -381,7 +381,7 @@ function loadCart() {
     var parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
     return parsed.filter(function (it) {
-      return it && it.modelId && Number(it.price) > 0;
+      return it && it.modelId;
     }).map(function (it) {
       return {
         modelId: it.modelId,
@@ -410,11 +410,19 @@ function cartSubtotalUsd(items) {
 // the grand total. No HTML; just clean plain text.
 function buildCartMessage(items, currencySymbol) {
   var sym = String(currencySymbol || "$");
+  var priced = items.filter(function (it) { return Number(it.price) > 0; });
+  var pending = items.length - priced.length;
   var lines = items.map(function (it) {
-    var lineTotal = (Number(it.price) || 0) * it.qty;
-    return (it.name || "Item") + " \u00d7 " + it.qty + " \u2014 " + sym + lineTotal.toFixed(2);
+    var price = Number(it.price) || 0;
+    if (!(price > 0)) return (it.name || "Item") + " \u00d7 " + it.qty + " \u2014 price to confirm";
+    return (it.name || "Item") + " \u00d7 " + it.qty + " \u2014 " + sym + (price * it.qty).toFixed(2);
   });
-  return "Hi! I'd like to order:" + "\n" + lines.join("\n") + "\nTotal: " + sym + cartSubtotalUsd(items).toFixed(2);
+  var msg = "Hi! I'd like to order:" + "\n" + lines.join("\n");
+  if (pending > 0) msg += "\n(" + pending + " item" + (pending > 1 ? "s" : "") + " \u2014 price to be confirmed)";
+  msg += priced.length > 0
+    ? "\nTotal: " + sym + cartSubtotalUsd(items).toFixed(2)
+    : "\nTotal: price to be confirmed";
+  return msg;
 }
 
 function formatDate(ts) {

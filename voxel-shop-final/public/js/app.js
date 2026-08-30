@@ -190,7 +190,7 @@ function App() {
     toastTimer.current = setTimeout(function () { setCartToast(false); }, 2800);
   }
   function handleAddToCart(model, qty) {
-    if (!model || !model.price) return;
+    if (!model) return;
     var addQty = Math.max(1, Math.min(99, Math.round(qty) || 1));
     setLastAdd({ modelId: model.id, added: addQty });
     setCart(function (prev) {
