@@ -852,6 +852,36 @@ function CartDrawer(props) {
   );
 }
 
+function RestoreCartPopup(props) {
+  return (
+    <div
+      onClick={props.onDiscard}
+      style={{ position: "fixed", inset: 0, background: "rgba(22,22,24,0.55)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 70, padding: 20 }}
+    >
+      <div onClick={function (e) { e.stopPropagation(); }} style={{ background: "var(--panel)", borderRadius: 16, padding: 28, maxWidth: 400, width: "100%", border: "1px solid var(--line)" }}>
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex items-center gap-2.5">
+            <div style={{ width: 40, height: 40, borderRadius: 10, background: "var(--panel-2)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <ShoppingBag size={20} style={{ color: "var(--brass-text)" }} />
+            </div>
+            <div className="font-display text-lg" style={{ color: "var(--ink)" }}>Your cart is waiting</div>
+          </div>
+          <button onClick={props.onDiscard} className="cursor-pointer border-0 bg-transparent" style={{ color: "var(--ink-dim)" }} aria-label="Discard saved cart">
+            <X size={18} />
+          </button>
+        </div>
+        <p className="text-sm mt-4 leading-relaxed" style={{ color: "var(--ink-dim)" }}>
+          You had {props.count === 1 ? "1 item" : props.count + " items"} saved in your cart. Did you want to keep it&nbsp;there?
+        </p>
+        <div className="flex flex-col gap-2.5 mt-6">
+          <PrimaryButton className="w-full" onClick={props.onKeep}>Yes, keep my cart</PrimaryButton>
+          <SecondaryButton className="w-full" onClick={props.onDiscard}>No, start fresh</SecondaryButton>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function CartToast(props) {
   if (!props.visible) return null;
   return (

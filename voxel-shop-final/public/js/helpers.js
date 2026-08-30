@@ -410,6 +410,33 @@ function saveCart(items) {
   try { window.localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(items)); }
   catch (e) { /* private mode / storage blocked — cart just lives in memory */ }
 }
+var CART_ARCHIVE_KEY = "voxel-cart-archive-v1";
+
+// Ordering a design directly ("Order now") clears the saved cart the
+// moment the WhatsApp / Instagram redirect happens. Before clearing, the
+// cart is stashed on this device so the next visit can offer it back —
+// otherwise a customer's saved picks would vanish silently with no way to
+// regain them.
+function archiveCart(items) {
+  try {
+    window.localStorage.setItem(CART_ARCHIVE_KEY, JSON.stringify({ items: items, archivedAt: Date.now() }));
+  } catch (e) { /* storage blocked — nothing to restore on the next visit */ }
+}
+function readCartArchive() {
+  try {
+    var raw = window.localStorage.getItem(CART_ARCHIVE_KEY);
+    if (!raw) return null;
+    var parsed = JSON.parse(raw);
+    if (!parsed || !Array.isArray(parsed.items) || !parsed.items.length) return null;
+    return parsed.items;
+  } catch (e) {
+    return null;
+  }
+}
+function clearCartArchive() {
+  try { window.localStorage.removeItem(CART_ARCHIVE_KEY); }
+  catch (e) { /* nothing to clear */ }
+}
 function cartItemCount(items) {
   return items.reduce(function (n, it) { return n + it.qty; }, 0);
 }

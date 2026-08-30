@@ -23,6 +23,17 @@ function App() {
   var _quickAddModel = React.useState(null); var quickAddModel = _quickAddModel[0]; var setQuickAddModel = _quickAddModel[1];
   var _cartToast = React.useState(false); var cartToast = _cartToast[0]; var setCartToast = _cartToast[1];
   var toastTimer = React.useRef(null);
+  // A cart that was saved on this device before the customer ordered a
+  // design directly (which clears it at the redirect). On their next
+  // visit we offer it back instead of letting it vanish silently.
+  var _savedCartOffer = React.useState(null); var savedCartOffer = _savedCartOffer[0]; var setSavedCartOffer = _savedCartOffer[1];
+
+  React.useEffect(function () {
+    // One-time offer on load: a previous "Order now" cleared the saved
+    // cart but archived it here first — ask whether to bring it back.
+    var archived = readCartArchive();
+    if (archived && archived.length) setSavedCartOffer(archived);
+  }, []);
   // Tracks the last thing added so the toast can offer an Undo, and
   // guards the checkout against a double-tap logging the same order
   // twice (the WhatsApp link itself is a real <a> now, so it keeps
@@ -248,6 +259,25 @@ function App() {
       return next;
     });
   }
+  function handleRestoreSavedCart(restore) {
+    if (restore && savedCartOffer && savedCartOffer.length) {
+      var incoming = savedCartOffer.slice();
+      setCart(function (prev) {
+        var next = prev.slice();
+        incoming.forEach(function (it) {
+          var hit = null;
+          for (var i = 0; i < next.length; i++) {
+            if (next[i].modelId === it.modelId) { hit = next[i]; break; }
+          }
+          if (hit) hit.qty = clampQty(hit.qty + it.qty);
+          else next.push({ modelId: it.modelId, name: it.name, price: String(it.price), image: it.image || "", qty: clampQty(it.qty) });
+        });
+        return next;
+      });
+    }
+    clearCartArchive();
+    setSavedCartOffer(null);
+  }
   function logCartInquiry(items, channel) {
     var entry = {
       id: makeId("inq"),
@@ -276,6 +306,13 @@ function App() {
   }
   function logInquiry(channel) {
     if (!orderPopupItem) return;
+    // "Order now" is a direct order for THIS item, not the saved cart.
+    // The moment the visitor is redirected to WhatsApp / Instagram, their
+    // saved cart is cleared (and archived) so the two never mix.
+    if (cart.length) {
+      archiveCart(cart);
+      setCart([]);
+    }
     var entry = {
       id: makeId("inq"),
       type: orderPopupItem.type,
@@ -422,6 +459,15 @@ function App() {
           item={orderPopupItem}
           onLogInquiry={logInquiry}
           onClose={function () { setOrderPopupItem(null); }}
+        />
+      )}
+
+      {savedCartOffer && savedCartOffer.length && (
+        <RestoreCartPopup
+          items={savedCartOffer}
+          count={cartItemCount(savedCartOffer)}
+          onKeep={function () { handleRestoreSavedCart(true); }}
+          onDiscard={function () { handleRestoreSavedCart(false); }}
         />
       )}
 
