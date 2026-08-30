@@ -410,6 +410,10 @@ function saveCart(items) {
   try { window.localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(items)); }
   catch (e) { /* private mode / storage blocked — cart just lives in memory */ }
 }
+function clearCartStorage() {
+  try { window.localStorage.removeItem(CART_STORAGE_KEY); }
+  catch (e) { /* storage blocked — nothing to clear */ }
+}
 var CART_ARCHIVE_KEY = "voxel-cart-archive-v1";
 
 // Ordering a design directly ("Order now") clears the saved cart the

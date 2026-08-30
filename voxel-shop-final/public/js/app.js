@@ -261,19 +261,13 @@ function App() {
   }
   function handleRestoreSavedCart(restore) {
     if (restore && savedCartOffer && savedCartOffer.length) {
-      var incoming = savedCartOffer.slice();
-      setCart(function (prev) {
-        var next = prev.slice();
-        incoming.forEach(function (it) {
-          var hit = null;
-          for (var i = 0; i < next.length; i++) {
-            if (next[i].modelId === it.modelId) { hit = next[i]; break; }
-          }
-          if (hit) hit.qty = clampQty(hit.qty + it.qty);
-          else next.push({ modelId: it.modelId, name: it.name, price: String(it.price), image: it.image || "", qty: clampQty(it.qty) });
-        });
-        return next;
-      });
+      // Replace the current cart with the archived one. The archive is the
+      // cart the customer "ordered away", so it is authoritative — merging
+      // could double up an item that is still lingering in the live cart
+      // key (e.g. if the clear raced with a fast redirect to WhatsApp).
+      setCart(savedCartOffer.map(function (it) {
+        return { modelId: it.modelId, name: String(it.name || ""), price: String(it.price), image: String(it.image || ""), qty: clampQty(it.qty) };
+      }));
     }
     clearCartArchive();
     setSavedCartOffer(null);
@@ -308,9 +302,14 @@ function App() {
     if (!orderPopupItem) return;
     // "Order now" is a direct order for THIS item, not the saved cart.
     // The moment the visitor is redirected to WhatsApp / Instagram, their
-    // saved cart is cleared (and archived) so the two never mix.
+    // saved cart is cleared (and archived) so the two never mix. We clear
+    // localStorage synchronously here (in addition to setCart) so that a
+    // fast redirect to WhatsApp never outruns the saveCart effect and
+    // leaves a stale cart behind — a stale cart would otherwise re-appear
+    // on the next visit AND merge with the archive, doubling quantities.
     if (cart.length) {
       archiveCart(cart);
+      clearCartStorage();
       setCart([]);
     }
     var entry = {
