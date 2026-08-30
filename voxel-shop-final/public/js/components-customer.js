@@ -653,7 +653,7 @@ function QuickAddPopup(props) {
         <div className="p-4">
           <div className="flex items-center justify-between">
             <span className="text-sm" style={{ color: "var(--ink-dim)" }}>Quantity</span>
-            <div className="flex items-center gap-0.5">
+            <div className="flex items-center" style={{ gap: 2 }}>
               <button
                 onClick={function () { setQty(Math.max(1, qty - 1)); }}
                 aria-label="Decrease quantity"
@@ -695,7 +695,14 @@ function CartDrawer(props) {
     if (!props.open) return;
     function onKey(e) { if (e.key === "Escape") props.onClose(); }
     document.addEventListener("keydown", onKey);
-    return function () { document.removeEventListener("keydown", onKey); };
+    // Lock the page behind the drawer (marketplace behavior) and restore
+    // it when the drawer closes.
+    var prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return function () {
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prevOverflow;
+    };
   }, [props.open]);
   if (!props.open) return null;
   return (
@@ -729,7 +736,7 @@ function CartDrawer(props) {
             </div>
           </div>
         ) : (
-          <div className="flex-1 px-5 overflow-y-auto" style={{ minHeight: 0 }}>
+          <div className="flex-1 px-5" style={{ minHeight: 0, overflowY: "auto" }}>
             <ul className="flex flex-col gap-4 py-4">
               {items.map(function (it) {
                 return (
@@ -739,7 +746,7 @@ function CartDrawer(props) {
                     </div>
                     <div className="flex-1" style={{ minWidth: 0 }}>
                       <div className="text-sm" style={{ color: "var(--ink)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{it.name}</div>
-                      <div className="font-mono-ac text-xs mt-0.5" style={{ color: "var(--ink-dim)" }}>{content.currencySymbol + (Number(it.price) || 0).toFixed(2)} each</div>
+                      <div className="font-mono-ac text-xs" style={{ color: "var(--ink-dim)", marginTop: 2 }}>{content.currencySymbol + (Number(it.price) || 0).toFixed(2)} each</div>
                       <div className="flex items-center gap-2 mt-1.5">
                         <button
                           onClick={function () { props.onChangeQty(it.modelId, -1); }}
@@ -760,7 +767,7 @@ function CartDrawer(props) {
                         </button>
                       </div>
                     </div>
-                    <div className="flex flex-col items-end gap-2">
+                    <div className="flex flex-col" style={{ alignItems: "flex-end", gap: 8 }}>
                       <button onClick={function () { props.onRemove(it.modelId); }} aria-label={"Remove " + it.name + " from cart"} className="cursor-pointer border-0 bg-transparent" style={{ color: "var(--danger)" }}>
                         <Trash2 size={14} />
                       </button>
@@ -779,8 +786,25 @@ function CartDrawer(props) {
               <span className="text-sm" style={{ color: "var(--ink-dim)" }}>Subtotal</span>
               <span className="font-mono-ac text-base" style={{ color: "var(--ink)" }}>{formatPriceDisplay(totalUsd, content)}</span>
             </div>
-            <p className="text-xs" style={{ color: "var(--ink-dim)" }}>You confirm the details on WhatsApp after checkout — no upfront payment.</p>
-            <PrimaryButton className="w-full" icon={MessageCircle} onClick={props.onCheckout} disabled={!props.checkoutUrl}>Checkout on WhatsApp</PrimaryButton>
+            <p className="text-xs" style={{ color: "var(--ink-dim)" }}>Shipping is confirmed when you message — you only pay after agreeing on the details, no upfront payment.</p>
+            {props.checkoutUrl ? (
+              <a
+                href={props.checkoutUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={props.onCheckout}
+                className="liquid-glass liquid-glass--tint-brass voxel-magnetic voxel-tilt w-full flex items-center justify-center gap-2 cursor-pointer"
+                style={{ padding: "12px 18px", borderRadius: 12, color: "var(--ink)", textDecoration: "none" }}
+              >
+                <MessageCircle size={18} />
+                <span>Checkout on WhatsApp</span>
+              </a>
+            ) : (
+              <span className="w-full flex items-center justify-center gap-2" style={{ padding: "12px 18px", borderRadius: 12, border: "1px solid var(--line)", color: "var(--ink-dim)", background: "var(--panel)" }}>
+                <MessageCircle size={18} />
+                <span>Checkout unavailable</span>
+              </span>
+            )}
             <button onClick={props.onClose} className="text-sm cursor-pointer border-0 bg-transparent" style={{ color: "var(--ink-dim)" }}>Continue shopping</button>
           </div>
         )}
@@ -799,14 +823,18 @@ function CartToast(props) {
         position: "fixed", left: "50%", bottom: 24, transform: "translateX(-50%)", zIndex: 80,
         background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 12,
         boxShadow: "0 14px 40px rgba(22,22,24,0.3)", padding: "10px 14px",
-        display: "flex", alignItems: "center", gap: 10,
+        display: "flex", alignItems: "center", gap: 10, maxWidth: "min(92vw, 460px)",
       }}
     >
       <CheckCircle2 size={17} style={{ color: "var(--teal)" }} />
-      <span className="text-sm" style={{ color: "var(--ink)" }}>Added to cart</span>
-      <button onClick={props.onViewCart} className="text-sm font-medium cursor-pointer border-0 bg-transparent" style={{ color: "var(--teal)", textDecoration: "underline" }}>
-        View cart
-      </button>
+      <div className="flex flex-col" style={{ minWidth: 0 }}>
+        <span className="text-sm" style={{ color: "var(--ink)" }}>Added to cart</span>
+        {props.label && (
+          <span className="text-xs font-mono-ac" style={{ color: "var(--ink-dim)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 200 }}>{props.label}</span>
+        )}
+      </div>
+      <button onClick={props.onUndo} className="text-sm font-medium cursor-pointer border-0 bg-transparent" style={{ color: "var(--ink)", textDecoration: "underline", whiteSpace: "nowrap" }}>Undo</button>
+      <button onClick={props.onViewCart} className="text-sm font-medium cursor-pointer border-0 bg-transparent" style={{ color: "var(--teal)", textDecoration: "underline", whiteSpace: "nowrap" }}>View cart</button>
     </div>
   );
 }

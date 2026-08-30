@@ -23,6 +23,12 @@ function App() {
   var _quickAddModel = React.useState(null); var quickAddModel = _quickAddModel[0]; var setQuickAddModel = _quickAddModel[1];
   var _cartToast = React.useState(false); var cartToast = _cartToast[0]; var setCartToast = _cartToast[1];
   var toastTimer = React.useRef(null);
+  // Tracks the last thing added so the toast can offer an Undo, and
+  // guards the checkout against a double-tap logging the same order
+  // twice (the WhatsApp link itself is a real <a> now, so it keeps
+  // working even where browsers block window.open popups like iOS).
+  var _lastAdd = React.useState(null); var lastAdd = _lastAdd[0]; var setLastAdd = _lastAdd[1];
+  var checkingOutRef = React.useRef(false);
   React.useEffect(function () { saveCart(cart); }, [cart]);
   React.useEffect(function () {
     return function () { if (toastTimer.current) clearTimeout(toastTimer.current); };
@@ -186,6 +192,7 @@ function App() {
   function handleAddToCart(model, qty) {
     if (!model || !model.price) return;
     var addQty = Math.max(1, Math.min(99, Math.round(qty) || 1));
+    setLastAdd({ modelId: model.id, added: addQty });
     setCart(function (prev) {
       var next = prev.slice();
       var hit = null;
@@ -198,6 +205,21 @@ function App() {
     });
     closeQuickAdd();
     showCartToast();
+  }
+  function undoLastAdd() {
+    var target = lastAdd;
+    if (!target) return;
+    setLastAdd(null);
+    setCartToast(false);
+    setCart(function (prev) {
+      var next = [];
+      for (var i = 0; i < prev.length; i++) {
+        if (prev[i].modelId !== target.modelId) { next.push(prev[i]); continue; }
+        var rest = prev[i].qty - target.added;
+        if (rest > 0) next.push(Object.assign({}, prev[i], { qty: rest }));
+      }
+      return next;
+    });
   }
   function handleCartQty(modelId, delta) {
     setCart(function (prev) {
@@ -231,13 +253,16 @@ function App() {
     apiPingDiscord("New cart order via " + channel + ": " + entry.note);
   }
   function handleCartCheckout() {
-    if (!cart.length) return;
-    var waUrl = buildWhatsAppUrl(content.whatsappNumber || content.contactPhone, buildCartMessage(cart));
-    if (waUrl) window.open(waUrl, "_blank", "noopener");
-    // Log it either way: an order attempt without a reachable number is
-    // still an inquiry the owner should see in the dashboard.
+    // The drawer's checkout is a real link the cart computed at render
+    // time, so this handler only logs the order and closes the drawer.
+    // The ref guards a double-tap / double-click from logging one order
+    // twice — the inquiry list is de-duplicated by id anyway, but two
+    // WhatsApp tabs opening is still confusing for the owner.
+    if (!cart.length || checkingOutRef.current) return;
+    checkingOutRef.current = true;
     logCartInquiry(cart, "whatsapp");
     setCartOpen(false);
+    setTimeout(function () { checkingOutRef.current = false; }, 1500);
   }
   function logInquiry(channel) {
     if (!orderPopupItem) return;
@@ -352,7 +377,7 @@ function App() {
     return <SkeletonScreen />;
   }
 
-  var cartCheckoutUrl = cart.length > 0 ? buildWhatsAppUrl(content.whatsappNumber || content.contactPhone, buildCartMessage(cart)) : null;
+  var cartCheckoutUrl = cart.length > 0 ? buildWhatsAppUrl(content.whatsappNumber || content.contactPhone, buildCartMessage(cart, content.currencySymbol)) : null;
 
   return (
     <div className="voxel-root">
@@ -411,7 +436,12 @@ function App() {
         onCheckout={handleCartCheckout}
       />
 
-      <CartToast visible={cartToast} onViewCart={function () { setCartToast(false); setCartOpen(true); }} />
+      <CartToast
+        visible={cartToast}
+        label={lastAdd ? (cart.find(function (it) { return it.modelId === lastAdd.modelId; }) || { name: "" }).name : null}
+        onUndo={undoLastAdd}
+        onViewCart={function () { setCartToast(false); setCartOpen(true); }}
+      />
     </div>
   );
 }

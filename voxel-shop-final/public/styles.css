@@ -1025,7 +1025,7 @@ button, a {
 }
 
 /* ---------------------------------------------------------
-   Shop cart — SHEIN-style access drawer, quick-add popup,
+   Shop cart â€” SHEIN-style access drawer, quick-add popup,
    add toast, and header badge bump.
 --------------------------------------------------------- */
 @keyframes voxel-drawer-in { from { transform: translateX(100%); } to { transform: translateX(0); } }

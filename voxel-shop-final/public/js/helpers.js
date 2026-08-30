@@ -408,12 +408,13 @@ function cartSubtotalUsd(items) {
 // Builds the WhatsApp message a customer sends when checking out the
 // whole cart: one line per item with its quantity and line total, then
 // the grand total. No HTML; just clean plain text.
-function buildCartMessage(items) {
+function buildCartMessage(items, currencySymbol) {
+  var sym = String(currencySymbol || "$");
   var lines = items.map(function (it) {
     var lineTotal = (Number(it.price) || 0) * it.qty;
-    return (it.name || "Item") + " \u00d7 " + it.qty + " \u2014 $" + lineTotal.toFixed(2);
+    return (it.name || "Item") + " \u00d7 " + it.qty + " \u2014 " + sym + lineTotal.toFixed(2);
   });
-  return "Hi! I'd like to order:" + "\n" + lines.join("\n") + "\nTotal: $" + cartSubtotalUsd(items).toFixed(2);
+  return "Hi! I'd like to order:" + "\n" + lines.join("\n") + "\nTotal: " + sym + cartSubtotalUsd(items).toFixed(2);
 }
 
 function formatDate(ts) {
