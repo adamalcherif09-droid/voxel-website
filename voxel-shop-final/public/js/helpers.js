@@ -38,7 +38,7 @@ var DEFAULT_CONTENT = {
   howItWorksStep3Title: "Printed & ready",
   howItWorksStep3Body: "Most orders are finished and handed over within a few days.",
   showNewBadge: true,
-  newBadgeDays: "14",
+  newBadgeDays: "7",
   showRecentPrints: true,
   recentPrintsEyebrow: "Recent prints",
   recentPrintsSpeed: "2.6",
@@ -71,11 +71,12 @@ var ALL_DESIGNS_CATEGORY = { id: ALL_DESIGNS_CATEGORY_ID, name: "All Designs" };
 var RECENT_PRINTS_MAX = 40;
 
 // A model counts as NEW when it was added to the catalog within the
-// owner-configurable window (Content tab), 14 days by default.
+// owner-configurable window (Content tab), one week by default — past
+// that, the tag stops showing so "New" always means genuinely fresh.
 function isNewModel(model, days) {
   if (!model || !model.createdAt) return false;
   var windowDays = Number(days);
-  if (!windowDays || windowDays < 0) windowDays = 14;
+  if (!windowDays || windowDays < 0) windowDays = 7;
   return Date.now() - model.createdAt < windowDays * 24 * 60 * 60 * 1000;
 }
 
@@ -374,6 +375,16 @@ function makeId(prefix) {
 -------------------------------------------------------- */
 var CART_STORAGE_KEY = "voxel-cart-v1";
 
+// Customers can order any quantity they want. A high safety ceiling (not
+// a category-style max) still keeps a runaway stepper or a pasted number
+// from overflowing the checkout math.
+var MAX_CART_QTY = 99999;
+function clampQty(q) {
+  var n = Math.round(Number(q));
+  if (!isFinite(n) || isNaN(n)) n = 1;
+  return Math.max(1, Math.min(MAX_CART_QTY, n));
+}
+
 function loadCart() {
   try {
     var raw = window.localStorage.getItem(CART_STORAGE_KEY);
@@ -388,7 +399,7 @@ function loadCart() {
         name: String(it.name || ""),
         price: String(it.price),
         image: String(it.image || ""),
-        qty: Math.max(1, Math.min(99, Math.round(Number(it.qty) || 1))),
+        qty: clampQty(it.qty),
       };
     });
   } catch (e) {

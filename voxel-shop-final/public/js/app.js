@@ -191,7 +191,7 @@ function App() {
   }
   function handleAddToCart(model, qty) {
     if (!model) return;
-    var addQty = Math.max(1, Math.min(99, Math.round(qty) || 1));
+    var addQty = clampQty(qty);
     setLastAdd({ modelId: model.id, added: addQty });
     setCart(function (prev) {
       var next = prev.slice();
@@ -199,7 +199,7 @@ function App() {
       for (var i = 0; i < next.length; i++) {
         if (next[i].modelId === model.id) { hit = next[i]; break; }
       }
-      if (hit) hit.qty = Math.min(99, hit.qty + addQty);
+      if (hit) hit.qty = Math.min(MAX_CART_QTY, hit.qty + addQty);
       else next.push({ modelId: model.id, name: model.name, price: String(model.price), image: model.image || "", qty: addQty });
       return next;
     });
@@ -228,7 +228,7 @@ function App() {
       for (var i = 0; i < prev.length; i++) {
         if (prev[i].modelId !== modelId) { next.push(prev[i]); continue; }
         var q = prev[i].qty + delta;
-        if (q >= 1) next.push(Object.assign({}, prev[i], { qty: Math.min(99, q) }));
+        if (q >= 1) next.push(Object.assign({}, prev[i], { qty: clampQty(q) }));
         changed = true;
       }
       if (!changed) return prev;
@@ -237,6 +237,16 @@ function App() {
   }
   function handleCartRemove(modelId) {
     setCart(function (prev) { return prev.filter(function (it) { return it.modelId !== modelId; }); });
+  }
+  function handleCartQtyTo(modelId, qty) {
+    setCart(function (prev) {
+      var next = [];
+      for (var i = 0; i < prev.length; i++) {
+        if (prev[i].modelId !== modelId) { next.push(prev[i]); continue; }
+        next.push(Object.assign({}, prev[i], { qty: clampQty(qty) }));
+      }
+      return next;
+    });
   }
   function logCartInquiry(items, channel) {
     var entry = {
@@ -432,6 +442,7 @@ function App() {
         checkoutUrl={cartCheckoutUrl}
         onClose={function () { setCartOpen(false); }}
         onChangeQty={handleCartQty}
+        onChangeQtyTo={handleCartQtyTo}
         onRemove={handleCartRemove}
         onCheckout={handleCartCheckout}
       />

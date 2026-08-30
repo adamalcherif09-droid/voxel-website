@@ -15,7 +15,7 @@ function Header(props) {
         <nav className="flex items-center gap-3 sm:gap-4">
           <button
             onClick={props.onCartOpen}
-            aria-label={"Open cart" + (cartCount ? " (" + cartCount + " items)" : "")}
+            aria-label={"Open cart" + (cartCount ? " (" + cartCount + " item" + (cartCount === 1 ? "" : "s") + ")" : "")}
             className="glass-accent voxel-tilt flex items-center justify-center px-3 py-2 rounded-md border-0 cursor-pointer relative"
             style={{ color: "var(--teal)" }}
           >
@@ -30,7 +30,7 @@ function Header(props) {
                   display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 1,
                 }}
               >
-                {cartCount > 99 ? "99+" : cartCount}
+                {cartCount > 999 ? "999+" : cartCount}
               </span>
             )}
           </button>
@@ -616,6 +616,33 @@ function OrderContactPopup(props) {
   );
 }
 
+// Editable quantity field: lets the customer type any amount directly
+// instead of only nudging with +/-, and commits the clamped value on
+// blur or Enter so an in-progress edit never snaps mid-keystroke.
+function QtyInput(props) {
+  var _draft = React.useState(String(props.value == null ? 1 : props.value)); var draft = _draft[0]; var setDraft = _draft[1];
+  React.useEffect(function () { setDraft(String(props.value == null ? 1 : props.value)); }, [props.value]);
+  function commit() {
+    var next = clampQty(draft);
+    setDraft(String(next));
+    props.onCommit(next);
+  }
+  return (
+    <input
+      type="number"
+      min="1"
+      max={MAX_CART_QTY}
+      aria-label={props.label}
+      value={draft}
+      onChange={function (e) { setDraft(e.target.value); }}
+      onBlur={commit}
+      onKeyDown={function (e) { if (e.key === "Enter") e.currentTarget.blur(); }}
+      className="font-mono-ac"
+      style={props.style}
+    />
+  );
+}
+
 function QuickAddPopup(props) {
   var model = props.model;
   var content = props.content;
@@ -659,9 +686,14 @@ function QuickAddPopup(props) {
               >
                 <Minus size={14} />
               </button>
-              <span className="font-mono-ac text-sm px-3" style={{ color: "var(--ink)", minWidth: 30, textAlign: "center" }}>{qty}</span>
+              <QtyInput
+                label="Quantity"
+                value={qty}
+                onCommit={setQty}
+                style={{ width: 52, height: 30, borderRadius: 8, border: "1px solid var(--line)", background: "transparent", color: "var(--ink)", textAlign: "center", fontSize: 14, padding: 0 }}
+              />
               <button
-                onClick={function () { setQty(Math.min(99, qty + 1)); }}
+                onClick={function () { setQty(Math.min(MAX_CART_QTY, qty + 1)); }}
                 aria-label="Increase quantity"
                 className="cursor-pointer border-0"
                 style={{ width: 30, height: 30, borderRadius: 8, border: "1px solid var(--line)", background: "transparent", color: "var(--ink)", display: "flex", alignItems: "center", justifyContent: "center" }}
@@ -755,7 +787,12 @@ function CartDrawer(props) {
                         >
                           <Minus size={12} />
                         </button>
-                        <span className="font-mono-ac text-xs" style={{ color: "var(--ink)", minWidth: 20, textAlign: "center" }}>{it.qty}</span>
+                        <QtyInput
+                          label={"Quantity of " + it.name}
+                          value={it.qty}
+                          onCommit={function (next) { props.onChangeQtyTo(it.modelId, next); }}
+                          style={{ width: 44, height: 24, borderRadius: 6, border: "1px solid var(--line)", background: "transparent", color: "var(--ink)", textAlign: "center", fontSize: 12, padding: 0, minWidth: 20 }}
+                        />
                         <button
                           onClick={function () { props.onChangeQty(it.modelId, 1); }}
                           aria-label={"Increase quantity of " + it.name}

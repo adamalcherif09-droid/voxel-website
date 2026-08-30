@@ -5,11 +5,36 @@ html, body {
   padding: 0;
 }
 
+/* The palette lives on :root so the browser canvas (html/body) matches
+   the site instead of showing a white band when you overscroll past the
+   top or bottom of the page. .voxel-root re-declares the same variables
+   so the site still works standalone. */
+:root {
+  --canvas: #d5c4ba;
+  --panel: #e6dbd3;
+  --panel-2: #eee6e0;
+  --line: #82746f;
+  --ink: #161618;
+  --ink-dim: #3c4d57;
+  --brass: #b58763;
+  --brass-text: #6e4a2e;
+  --brass-soft: rgba(181,135,99,0.18);
+  --teal: #0f212b;
+  --teal-soft: rgba(15,33,43,0.12);
+  --danger: #8c2e1e;
+}
+
 html {
   scroll-behavior: smooth;
+  background-color: var(--canvas);
+  /* Stop the overscroll rubber-band from revealing the browser's white
+     canvas behind the page. The drawer still locks/unlocks scrolling on
+     an inner element, so this does not affect it. */
+  overscroll-behavior-y: none;
 }
 
 body {
+  background-color: var(--canvas);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
@@ -44,6 +69,19 @@ body {
 .font-mono-ac { font-family: 'JetBrains Mono', monospace; }
 .voxel-root ::selection { background: var(--brass-soft); }
 .voxel-root :focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
+
+/* Quantity fields in the quick-add popup and the cart drawer are small,
+   centred numbers — losing the browser's native number spinners keeps
+   them from pushing the value around and looking cramped. */
+.voxel-root input[type="number"]::-webkit-outer-spin-button,
+.voxel-root input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.voxel-root input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
 
 @keyframes voxelReveal {
   from { clip-path: inset(0 0 100% 0); opacity: 0.3; }
@@ -174,9 +212,11 @@ body {
 }
 .voxel-new-badge--absolute {
   position: absolute;
-  top: 10px;
-  right: 10px;
   z-index: 2;
+  /* Top-left, opposite the add-to-cart bag button on the top-right, so
+     a fresh model shows both tags without them colliding. */
+  top: 10px;
+  left: 10px;
 }
 
 /* ============ RECENT PRINTS WALL (marquee) ============ */
