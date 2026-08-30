@@ -644,7 +644,7 @@ function QuickAddPopup(props) {
             {model.image ? <img src={model.image} alt={model.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <ImageIcon size={24} style={{ color: "var(--ink-dim)" }} />}
           </div>
           <div className="flex flex-col justify-center flex-1" style={{ minWidth: 0 }}>
-            <div className="font-display text-base" style={{ color: "var(--ink)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }} style={{ color: "var(--ink)" }}>{model.name}</div>
+            <div className="font-display text-base" style={{ color: "var(--ink)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{model.name}</div>
             <div className="font-mono-ac text-sm mt-1" style={{ color: "var(--ink)" }}>
               {formatPriceDisplay(model.price, content)}
             </div>
@@ -738,7 +738,7 @@ function CartDrawer(props) {
                       {it.image ? <img src={it.image} alt={it.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <ImageIcon size={18} style={{ color: "var(--ink-dim)" }} />}
                     </div>
                     <div className="flex-1" style={{ minWidth: 0 }}>
-                      <div className="text-sm" style={{ color: "var(--ink)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }} style={{ color: "var(--ink)" }}>{it.name}</div>
+                      <div className="text-sm" style={{ color: "var(--ink)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{it.name}</div>
                       <div className="font-mono-ac text-xs mt-0.5" style={{ color: "var(--ink-dim)" }}>{content.currencySymbol + (Number(it.price) || 0).toFixed(2)} each</div>
                       <div className="flex items-center gap-2 mt-1.5">
                         <button
