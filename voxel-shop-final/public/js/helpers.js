@@ -363,6 +363,59 @@ function apiPingDiscord(content) {
 function makeId(prefix) {
   return prefix + "-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 }
+
+/* ---------------------------------------------------------
+   Shopping cart — lives in the visitor's own browser
+   (localStorage), so it survives page navigations and
+   reloads but never touches the backend or the account.
+   Items are snapshots taken when added, so the cart still
+   shows the name/price the customer actually picked even
+   if the owner edits the catalog later.
+-------------------------------------------------------- */
+var CART_STORAGE_KEY = "voxel-cart-v1";
+
+function loadCart() {
+  try {
+    var raw = window.localStorage.getItem(CART_STORAGE_KEY);
+    if (!raw) return [];
+    var parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(function (it) {
+      return it && it.modelId && Number(it.price) > 0;
+    }).map(function (it) {
+      return {
+        modelId: it.modelId,
+        name: String(it.name || ""),
+        price: String(it.price),
+        image: String(it.image || ""),
+        qty: Math.max(1, Math.min(99, Math.round(Number(it.qty) || 1))),
+      };
+    });
+  } catch (e) {
+    return [];
+  }
+}
+function saveCart(items) {
+  try { window.localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(items)); }
+  catch (e) { /* private mode / storage blocked — cart just lives in memory */ }
+}
+function cartItemCount(items) {
+  return items.reduce(function (n, it) { return n + it.qty; }, 0);
+}
+function cartSubtotalUsd(items) {
+  return items.reduce(function (s, it) { return s + (Number(it.price) || 0) * it.qty; }, 0);
+}
+// Builds the WhatsApp message a customer sends when checking out the
+// whole cart: one line per item with its quantity and line total, then
+// the grand total. No HTML; just clean plain text.
+function buildCartMessage(items) {
+  var lines = items.map(function (it) {
+    var lineTotal = (Number(it.price) || 0) * it.qty;
+    return (it.name || "Item") + " \u00d7 " + it.qty + " \u2014 $" + lineTotal.toFixed(2);
+  });
+  return "Hi! I'd like to order:" + "\n" + lines.join("\n") + "\nTotal: $" + cartSubtotalUsd(items).toFixed(2);
+}
+
 function formatDate(ts) {
   if (!ts) return "";
   var d = new Date(ts);

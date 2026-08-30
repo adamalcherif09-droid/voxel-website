@@ -50,7 +50,7 @@ function PrimaryButton(props) {
       type={type}
       onClick={props.onClick}
       disabled={props.disabled}
-      className={"inline-flex items-center justify-center gap-2 px-5 py-3 rounded-md text-sm font-medium border-0 cursor-pointer" + (props.disabled ? "" : " liquid-glass tint-brass voxel-magnetic voxel-tilt")}
+      className={"inline-flex items-center justify-center gap-2 px-5 py-3 rounded-md text-sm font-medium border-0 cursor-pointer" + (props.disabled ? "" : " liquid-glass tint-brass voxel-magnetic voxel-tilt") + (props.className ? " " + props.className : "")}
       style={{
         background: props.disabled ? "var(--line)" : undefined,
         color: props.disabled ? "var(--ink-dim)" : "#161618",
@@ -70,7 +70,7 @@ function SecondaryButton(props) {
       type="button"
       onClick={props.onClick}
       disabled={props.disabled}
-      className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-md text-sm font-medium cursor-pointer"
+      className={"inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-md text-sm font-medium cursor-pointer" + (props.className ? " " + props.className : "")}
       style={{ background: "transparent", color: props.disabled ? "var(--ink-dim)" : "var(--ink)", border: "1px solid var(--line)", opacity: props.disabled ? 0.6 : 1 }}
     >
       {Icon && <Icon size={16} />}

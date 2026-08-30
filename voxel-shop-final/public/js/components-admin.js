@@ -285,7 +285,7 @@ function AdminInquiries(props) {
                 <div className="text-xs mt-2" style={{ color: "var(--ink-dim)" }}>via {i.channel === "whatsapp" ? "WhatsApp" : "Instagram"} · {formatDate(i.createdAt)}</div>
               </div>
               <span className="text-xs px-2.5 py-1 rounded-full font-mono-ac uppercase" style={{ background: i.channel === "whatsapp" ? "var(--teal-soft)" : "var(--brass-soft)", color: i.channel === "whatsapp" ? "var(--teal)" : "var(--brass-text)" }}>
-                {i.type === "custom" ? "custom" : "catalog"}
+                {i.type === "custom" ? "custom" : i.type === "cart" ? "cart" : "catalog"}
               </span>
             </div>
           </div>

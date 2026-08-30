@@ -1,5 +1,6 @@
 function Header(props) {
   var content = props.content;
+  var cartCount = props.cartCount || 0;
   return (
     <header style={{ background: "var(--canvas)", borderBottom: "1px solid var(--line)" }} className="sticky top-0 z-30">
       <div className="max-w-6xl mx-auto flex items-center justify-between px-5 sm:px-8 py-4">
@@ -12,6 +13,27 @@ function Header(props) {
           <span className="font-display text-xl tracking-tight" style={{ color: "var(--ink)", marginLeft: "-2px" }}>{content.businessName}</span>
         </button>
         <nav className="flex items-center gap-3 sm:gap-4">
+          <button
+            onClick={props.onCartOpen}
+            aria-label={"Open cart" + (cartCount ? " (" + cartCount + " items)" : "")}
+            className="glass-accent voxel-tilt flex items-center justify-center px-3 py-2 rounded-md border-0 cursor-pointer relative"
+            style={{ color: "var(--teal)" }}
+          >
+            <ShoppingBag size={18} />
+            {cartCount > 0 && (
+              <span
+                key={cartCount}
+                className="voxel-badge-bump font-mono-ac"
+                style={{
+                  position: "absolute", top: -6, right: -6, minWidth: 20, height: 20, padding: "0 5px",
+                  borderRadius: 10, background: "var(--brass)", color: "#161618", fontSize: 11,
+                  display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 1,
+                }}
+              >
+                {cartCount > 99 ? "99+" : cartCount}
+              </span>
+            )}
+          </button>
           <button onClick={props.goCustom} className="glass-accent tint-brass voxel-magnetic voxel-tilt flex items-center gap-1.5 px-3.5 py-2 rounded-md border-0 cursor-pointer text-sm font-medium" style={{ color: "#161618" }}>
             <UploadCloud size={16} />
             <span className="hidden sm:inline">Custom print</span>
@@ -85,6 +107,21 @@ function ModelCard(props) {
           <ImageIcon size={26} style={{ color: "var(--ink-dim)" }} />
         )}
         {isNew && <span className="voxel-new-badge voxel-new-badge--absolute font-mono-ac">New</span>}
+        {model.price ? (
+          <button
+            onClick={function (e) { e.stopPropagation(); props.onAddToCart(); }}
+            aria-label={"Add " + model.name + " to cart"}
+            title="Add to cart"
+            className="voxel-tilt cursor-pointer border-0"
+            style={{
+              position: "absolute", top: 10, right: 10, width: 34, height: 34, borderRadius: 17,
+              background: "rgba(22,22,24,0.65)", color: "#f2ece5",
+              display: "flex", alignItems: "center", justifyContent: "center", backdropFilter: "blur(2px)",
+            }}
+          >
+            <ShoppingBag size={17} />
+          </button>
+        ) : null}
       </div>
       <div className="p-3 sm:p-4 flex flex-col flex-1">
         <div className="flex items-start justify-between gap-2">
@@ -202,7 +239,7 @@ function HomeView(props) {
             {featured.map(function (m) {
               return (
                 <div key={m.id} className="voxel-masonry-item">
-                  <ModelCard model={m} content={content} onOrder={function () { props.onOrderModel(m); }} onView={function () { props.onViewModel(m); }} highlight />
+                  <ModelCard model={m} content={content} onOrder={function () { props.onOrderModel(m); }} onView={function () { props.onViewModel(m); }} onAddToCart={function () { props.onAddToCart(m); }} highlight />
                 </div>
               );
             })}
@@ -308,7 +345,7 @@ function CategoryView(props) {
           {visibleItems.map(function (m) {
             return (
               <div key={m.id} className="voxel-masonry-item">
-                <ModelCard model={m} content={content} onOrder={function () { props.onOrderModel(m); }} onView={function () { props.onViewModel(m); }} />
+                <ModelCard model={m} content={content} onOrder={function () { props.onOrderModel(m); }} onView={function () { props.onViewModel(m); }} onAddToCart={function () { props.onAddToCart(m); }} />
               </div>
             );
           })}
@@ -431,7 +468,16 @@ function ModelDetailPopup(props) {
           <div className="font-mono-ac text-base" style={{ color: "var(--ink)" }}>
             {model.price ? formatPriceDisplay(model.price, content) : "Ask for price"}
           </div>
-          <PrimaryButton onClick={props.onOrder}>Order now</PrimaryButton>
+          <div className="flex flex-col sm:flex-row gap-3">
+            {model.price ? (
+              <div className="flex-1">
+                <SecondaryButton className="w-full" icon={ShoppingBag} onClick={props.onAddToCart}>Add to cart</SecondaryButton>
+              </div>
+            ) : null}
+            <div className="flex-1">
+              <PrimaryButton className="w-full" onClick={props.onOrder}>Order now</PrimaryButton>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -570,6 +616,197 @@ function OrderContactPopup(props) {
 
         <button onClick={props.onClose} className="text-sm mt-5 cursor-pointer border-0 bg-transparent" style={{ color: "var(--ink-dim)" }}>Cancel</button>
       </div>
+    </div>
+  );
+}
+
+function QuickAddPopup(props) {
+  var model = props.model;
+  var content = props.content;
+  var _qty = React.useState(1); var qty = _qty[0]; var setQty = _qty[1];
+  React.useEffect(function () {
+    function onKey(e) { if (e.key === "Escape") props.onClose(); }
+    document.addEventListener("keydown", onKey);
+    return function () { document.removeEventListener("keydown", onKey); };
+  }, []);
+  return (
+    <div
+      onClick={props.onClose}
+      style={{ position: "fixed", inset: 0, background: "rgba(22,22,24,0.55)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 60, padding: 20 }}
+    >
+      <div
+        onClick={function (e) { e.stopPropagation(); }}
+        className="voxel-quick-pop"
+        style={{ background: "var(--panel)", borderRadius: 16, width: "100%", maxWidth: 360, border: "1px solid var(--line)", overflow: "hidden", boxShadow: "0 18px 50px rgba(22,22,24,0.25)" }}
+      >
+        <div className="flex gap-3 p-4" style={{ background: "var(--panel-2)" }}>
+          <div style={{ width: 76, height: 76, borderRadius: 10, overflow: "hidden", flexShrink: 0, background: "var(--panel)" }}>
+            {model.image ? <img src={model.image} alt={model.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <ImageIcon size={24} style={{ color: "var(--ink-dim)" }} />}
+          </div>
+          <div className="flex flex-col justify-center flex-1" style={{ minWidth: 0 }}>
+            <div className="font-display text-base" style={{ color: "var(--ink)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }} style={{ color: "var(--ink)" }}>{model.name}</div>
+            <div className="font-mono-ac text-sm mt-1" style={{ color: "var(--ink)" }}>
+              {formatPriceDisplay(model.price, content)}
+            </div>
+          </div>
+        </div>
+        <div className="p-4">
+          <div className="flex items-center justify-between">
+            <span className="text-sm" style={{ color: "var(--ink-dim)" }}>Quantity</span>
+            <div className="flex items-center gap-0.5">
+              <button
+                onClick={function () { setQty(Math.max(1, qty - 1)); }}
+                aria-label="Decrease quantity"
+                className="cursor-pointer border-0"
+                style={{ width: 30, height: 30, borderRadius: 8, border: "1px solid var(--line)", background: "transparent", color: "var(--ink)", display: "flex", alignItems: "center", justifyContent: "center" }}
+              >
+                <Minus size={14} />
+              </button>
+              <span className="font-mono-ac text-sm px-3" style={{ color: "var(--ink)", minWidth: 30, textAlign: "center" }}>{qty}</span>
+              <button
+                onClick={function () { setQty(Math.min(99, qty + 1)); }}
+                aria-label="Increase quantity"
+                className="cursor-pointer border-0"
+                style={{ width: 30, height: 30, borderRadius: 8, border: "1px solid var(--line)", background: "transparent", color: "var(--ink)", display: "flex", alignItems: "center", justifyContent: "center" }}
+              >
+                <Plus size={14} />
+              </button>
+            </div>
+          </div>
+          <div className="flex items-center justify-between mt-4 text-sm" style={{ color: "var(--ink)" }}>
+            <span style={{ color: "var(--ink-dim)" }}>Total</span>
+            <span className="font-mono-ac">{content.currencySymbol + (Number(model.price || 0) * qty).toFixed(2)}</span>
+          </div>
+          <div className="mt-4">
+            <PrimaryButton className="w-full" onClick={function () { props.onAdd(model, qty); }}>Add to cart</PrimaryButton>
+          </div>
+          <button onClick={props.onClose} className="w-full text-sm mt-3 cursor-pointer border-0 bg-transparent" style={{ color: "var(--ink-dim)" }}>Cancel</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CartDrawer(props) {
+  var items = props.items;
+  var content = props.content;
+  var totalUsd = cartSubtotalUsd(items);
+  React.useEffect(function () {
+    if (!props.open) return;
+    function onKey(e) { if (e.key === "Escape") props.onClose(); }
+    document.addEventListener("keydown", onKey);
+    return function () { document.removeEventListener("keydown", onKey); };
+  }, [props.open]);
+  if (!props.open) return null;
+  return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 70 }}>
+      <div onClick={props.onClose} style={{ position: "absolute", inset: 0, background: "rgba(22,22,24,0.55)" }} aria-hidden="true" />
+      <aside
+        className="voxel-cart-drawer"
+        aria-label="Shopping cart"
+        style={{
+          position: "absolute", top: 0, right: 0, height: "100%", width: "100%", maxWidth: 420,
+          background: "var(--panel)", boxShadow: "-18px 0 50px rgba(22,22,24,0.25)",
+          display: "flex", flexDirection: "column",
+        }}
+      >
+        <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: "1px solid var(--line)" }}>
+          <div className="font-display text-lg" style={{ color: "var(--ink)" }}>
+            Your cart <span className="font-mono-ac text-sm" style={{ color: "var(--ink-dim)" }}>({cartItemCount(items)} {cartItemCount(items) === 1 ? "item" : "items"})</span>
+          </div>
+          <button onClick={props.onClose} className="cursor-pointer border-0 bg-transparent" style={{ color: "var(--ink-dim)" }} aria-label="Close cart">
+            <X size={18} />
+          </button>
+        </div>
+
+        {items.length === 0 ? (
+          <div className="flex flex-col items-center justify-center text-center px-6 flex-1">
+            <ShoppingBag size={30} style={{ color: "var(--ink-dim)" }} />
+            <div className="font-display text-lg mt-4" style={{ color: "var(--ink)" }}>Your cart is empty</div>
+            <p className="text-sm mt-1 max-w-xs" style={{ color: "var(--ink-dim)" }}>Add a few designs and come back here to order them all at once.</p>
+            <div className="mt-5">
+              <SecondaryButton onClick={props.onClose}>Browse designs</SecondaryButton>
+            </div>
+          </div>
+        ) : (
+          <div className="flex-1 px-5 overflow-y-auto" style={{ minHeight: 0 }}>
+            <ul className="flex flex-col gap-4 py-4">
+              {items.map(function (it) {
+                return (
+                  <li key={it.modelId} className="flex items-center gap-3">
+                    <div style={{ width: 56, height: 56, borderRadius: 8, overflow: "hidden", flexShrink: 0, background: "var(--panel-2)" }}>
+                      {it.image ? <img src={it.image} alt={it.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <ImageIcon size={18} style={{ color: "var(--ink-dim)" }} />}
+                    </div>
+                    <div className="flex-1" style={{ minWidth: 0 }}>
+                      <div className="text-sm" style={{ color: "var(--ink)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }} style={{ color: "var(--ink)" }}>{it.name}</div>
+                      <div className="font-mono-ac text-xs mt-0.5" style={{ color: "var(--ink-dim)" }}>{content.currencySymbol + (Number(it.price) || 0).toFixed(2)} each</div>
+                      <div className="flex items-center gap-2 mt-1.5">
+                        <button
+                          onClick={function () { props.onChangeQty(it.modelId, -1); }}
+                          aria-label={"Decrease quantity of " + it.name}
+                          className="cursor-pointer border-0"
+                          style={{ width: 24, height: 24, borderRadius: 6, border: "1px solid var(--line)", background: "transparent", color: "var(--ink)", display: "flex", alignItems: "center", justifyContent: "center" }}
+                        >
+                          <Minus size={12} />
+                        </button>
+                        <span className="font-mono-ac text-xs" style={{ color: "var(--ink)", minWidth: 20, textAlign: "center" }}>{it.qty}</span>
+                        <button
+                          onClick={function () { props.onChangeQty(it.modelId, 1); }}
+                          aria-label={"Increase quantity of " + it.name}
+                          className="cursor-pointer border-0"
+                          style={{ width: 24, height: 24, borderRadius: 6, border: "1px solid var(--line)", background: "transparent", color: "var(--ink)", display: "flex", alignItems: "center", justifyContent: "center" }}
+                        >
+                          <Plus size={12} />
+                        </button>
+                      </div>
+                    </div>
+                    <div className="flex flex-col items-end gap-2">
+                      <button onClick={function () { props.onRemove(it.modelId); }} aria-label={"Remove " + it.name + " from cart"} className="cursor-pointer border-0 bg-transparent" style={{ color: "var(--danger)" }}>
+                        <Trash2 size={14} />
+                      </button>
+                      <span className="font-mono-ac text-xs" style={{ color: "var(--ink)" }}>{content.currencySymbol + ((Number(it.price) || 0) * it.qty).toFixed(2)}</span>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        )}
+
+        {items.length > 0 && (
+          <div className="px-5 py-4 flex flex-col gap-3" style={{ borderTop: "1px solid var(--line)", background: "var(--panel)" }}>
+            <div className="flex items-center justify-between">
+              <span className="text-sm" style={{ color: "var(--ink-dim)" }}>Subtotal</span>
+              <span className="font-mono-ac text-base" style={{ color: "var(--ink)" }}>{formatPriceDisplay(totalUsd, content)}</span>
+            </div>
+            <p className="text-xs" style={{ color: "var(--ink-dim)" }}>You confirm the details on WhatsApp after checkout — no upfront payment.</p>
+            <PrimaryButton className="w-full" icon={MessageCircle} onClick={props.onCheckout} disabled={!props.checkoutUrl}>Checkout on WhatsApp</PrimaryButton>
+            <button onClick={props.onClose} className="text-sm cursor-pointer border-0 bg-transparent" style={{ color: "var(--ink-dim)" }}>Continue shopping</button>
+          </div>
+        )}
+      </aside>
+    </div>
+  );
+}
+
+function CartToast(props) {
+  if (!props.visible) return null;
+  return (
+    <div
+      className="voxel-cart-toast"
+      role="status"
+      style={{
+        position: "fixed", left: "50%", bottom: 24, transform: "translateX(-50%)", zIndex: 80,
+        background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 12,
+        boxShadow: "0 14px 40px rgba(22,22,24,0.3)", padding: "10px 14px",
+        display: "flex", alignItems: "center", gap: 10,
+      }}
+    >
+      <CheckCircle2 size={17} style={{ color: "var(--teal)" }} />
+      <span className="text-sm" style={{ color: "var(--ink)" }}>Added to cart</span>
+      <button onClick={props.onViewCart} className="text-sm font-medium cursor-pointer border-0 bg-transparent" style={{ color: "var(--teal)", textDecoration: "underline" }}>
+        View cart
+      </button>
     </div>
   );
 }

@@ -1023,3 +1023,16 @@ button, a {
   .tint-brass { background: var(--brass) !important; }
   .tint-teal { background: var(--teal) !important; }
 }
+
+/* ---------------------------------------------------------
+   Shop cart — SHEIN-style access drawer, quick-add popup,
+   add toast, and header badge bump.
+--------------------------------------------------------- */
+@keyframes voxel-drawer-in { from { transform: translateX(100%); } to { transform: translateX(0); } }
+.voxel-cart-drawer { animation: voxel-drawer-in 0.28s cubic-bezier(0.22, 1, 0.36, 1); }
+@keyframes voxel-quick-pop { from { transform: scale(0.94); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+.voxel-quick-pop { animation: voxel-quick-pop 0.18s ease-out; }
+@keyframes voxel-toast-in { from { transform: translateX(-50%) translateY(14px); opacity: 0; } to { transform: translateX(-50%) translateY(0); opacity: 1; } }
+.voxel-cart-toast { animation: voxel-toast-in 0.22s ease-out; }
+@keyframes voxel-badge-bump { 0% { transform: scale(0.6); } 60% { transform: scale(1.25); } 100% { transform: scale(1); } }
+.voxel-badge-bump { animation: voxel-badge-bump 0.28s ease-out; }

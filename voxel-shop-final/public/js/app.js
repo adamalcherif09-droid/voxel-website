@@ -15,6 +15,19 @@ function App() {
   var _adminTab = React.useState("orders"); var adminTab = _adminTab[0]; var setAdminTab = _adminTab[1];
   var _loadError = React.useState(false); var loadError = _loadError[0]; var setLoadError = _loadError[1];
 
+  // Shopping cart: a plain array of line items that lives in the
+  // visitor's localStorage (see loadCart/saveCart in helpers.js). It is
+  // customer-side state only — nothing about it touches the backend.
+  var _cart = React.useState(loadCart); var cart = _cart[0]; var setCart = _cart[1];
+  var _cartOpen = React.useState(false); var cartOpen = _cartOpen[0]; var setCartOpen = _cartOpen[1];
+  var _quickAddModel = React.useState(null); var quickAddModel = _quickAddModel[0]; var setQuickAddModel = _quickAddModel[1];
+  var _cartToast = React.useState(false); var cartToast = _cartToast[0]; var setCartToast = _cartToast[1];
+  var toastTimer = React.useRef(null);
+  React.useEffect(function () { saveCart(cart); }, [cart]);
+  React.useEffect(function () {
+    return function () { if (toastTimer.current) clearTimeout(toastTimer.current); };
+  }, []);
+
   React.useEffect(function () {
     Promise.all([
       storageGet("voxel-catalog"),
@@ -161,6 +174,71 @@ function App() {
   function handleCustomOrderNow(data) {
     setOrderPopupItem({ type: "custom", name: "Custom order", note: data.note, fileName: data.fileName });
   }
+
+  // --- Cart actions ---
+  function openQuickAdd(model) { setQuickAddModel(model); }
+  function closeQuickAdd() { setQuickAddModel(null); }
+  function showCartToast() {
+    setCartToast(true);
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(function () { setCartToast(false); }, 2800);
+  }
+  function handleAddToCart(model, qty) {
+    if (!model || !model.price) return;
+    var addQty = Math.max(1, Math.min(99, Math.round(qty) || 1));
+    setCart(function (prev) {
+      var next = prev.slice();
+      var hit = null;
+      for (var i = 0; i < next.length; i++) {
+        if (next[i].modelId === model.id) { hit = next[i]; break; }
+      }
+      if (hit) hit.qty = Math.min(99, hit.qty + addQty);
+      else next.push({ modelId: model.id, name: model.name, price: String(model.price), image: model.image || "", qty: addQty });
+      return next;
+    });
+    closeQuickAdd();
+    showCartToast();
+  }
+  function handleCartQty(modelId, delta) {
+    setCart(function (prev) {
+      var next = [];
+      var changed = false;
+      for (var i = 0; i < prev.length; i++) {
+        if (prev[i].modelId !== modelId) { next.push(prev[i]); continue; }
+        var q = prev[i].qty + delta;
+        if (q >= 1) next.push(Object.assign({}, prev[i], { qty: Math.min(99, q) }));
+        changed = true;
+      }
+      if (!changed) return prev;
+      return next;
+    });
+  }
+  function handleCartRemove(modelId) {
+    setCart(function (prev) { return prev.filter(function (it) { return it.modelId !== modelId; }); });
+  }
+  function logCartInquiry(items, channel) {
+    var entry = {
+      id: makeId("inq"),
+      type: "cart",
+      label: "Cart order",
+      note: items.map(function (it) { return it.name + " \u00d7 " + it.qty; }).join(", "),
+      fileName: "",
+      channel: channel,
+      createdAt: Date.now(),
+    };
+    setInquiries(function (prev) { return [entry].concat(prev); });
+    saveInquiryRemote(entry);
+    apiPingDiscord("New cart order via " + channel + ": " + entry.note);
+  }
+  function handleCartCheckout() {
+    if (!cart.length) return;
+    var waUrl = buildWhatsAppUrl(content.whatsappNumber || content.contactPhone, buildCartMessage(cart));
+    if (waUrl) window.open(waUrl, "_blank", "noopener");
+    // Log it either way: an order attempt without a reachable number is
+    // still an inquiry the owner should see in the dashboard.
+    logCartInquiry(cart, "whatsapp");
+    setCartOpen(false);
+  }
   function logInquiry(channel) {
     if (!orderPopupItem) return;
     var entry = {
@@ -274,12 +352,14 @@ function App() {
     return <SkeletonScreen />;
   }
 
+  var cartCheckoutUrl = cart.length > 0 ? buildWhatsAppUrl(content.whatsappNumber || content.contactPhone, buildCartMessage(cart)) : null;
+
   return (
     <div className="voxel-root">
-      <Header content={content} goHome={goHome} goCustom={goCustom} />
+      <Header content={content} goHome={goHome} goCustom={goCustom} cartCount={cartItemCount(cart)} onCartOpen={function () { setCartOpen(true); }} />
       <main>
-        {view === "home" && <HomeView content={content} categories={categories} models={models} goCategory={goCategory} goCustom={goCustom} onOrderModel={openCatalogOrder} onViewModel={setViewingModel} />}
-        {view === "category" && activeCategory && <CategoryView content={content} category={activeCategory} models={models} goBack={goHome} onOrderModel={openCatalogOrder} onViewModel={setViewingModel} />}
+        {view === "home" && <HomeView content={content} categories={categories} models={models} goCategory={goCategory} goCustom={goCustom} onOrderModel={openCatalogOrder} onViewModel={setViewingModel} onAddToCart={openQuickAdd} />}
+        {view === "category" && activeCategory && <CategoryView content={content} category={activeCategory} models={models} goBack={goHome} onOrderModel={openCatalogOrder} onViewModel={setViewingModel} onAddToCart={openQuickAdd} />}
         {view === "custom" && <CustomOrderView content={content} goBack={goHome} onOrderNow={handleCustomOrderNow} />}
         {view === "admin-gate" && <AdminGate security={settings.security || DEFAULT_SECURITY} notice={reauthHint} onSuccess={handleGateSuccess} />}
         {view === "admin" && isAdmin && (
@@ -296,6 +376,7 @@ function App() {
           content={content}
           model={viewingModel}
           onOrder={function () { openCatalogOrder(viewingModel); setViewingModel(null); }}
+          onAddToCart={function () { openQuickAdd(viewingModel); }}
           onClose={function () { setViewingModel(null); }}
         />
       )}
@@ -308,6 +389,29 @@ function App() {
           onClose={function () { setOrderPopupItem(null); }}
         />
       )}
+
+      {quickAddModel && (
+        <QuickAddPopup
+          key={quickAddModel.id}
+          model={quickAddModel}
+          content={content}
+          onAdd={handleAddToCart}
+          onClose={closeQuickAdd}
+        />
+      )}
+
+      <CartDrawer
+        open={cartOpen}
+        items={cart}
+        content={content}
+        checkoutUrl={cartCheckoutUrl}
+        onClose={function () { setCartOpen(false); }}
+        onChangeQty={handleCartQty}
+        onRemove={handleCartRemove}
+        onCheckout={handleCartCheckout}
+      />
+
+      <CartToast visible={cartToast} onViewCart={function () { setCartToast(false); setCartOpen(true); }} />
     </div>
   );
 }

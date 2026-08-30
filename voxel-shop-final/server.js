@@ -1062,7 +1062,7 @@ app.post("/api/inquiries", rateLimit("inq", 20, 60 * 60 * 1000), async (req, res
   }
   const clean = {
     id: String(entry.id).slice(0, 60),
-    type: entry.type === "custom" ? "custom" : "catalog",
+    type: entry.type === "custom" || entry.type === "cart" ? entry.type : "catalog",
     label: String(entry.label).slice(0, 200),
     note: String(entry.note || "").slice(0, 1000),
     fileName: String(entry.fileName || "").slice(0, 200),

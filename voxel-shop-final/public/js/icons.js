@@ -103,6 +103,25 @@ function Plus(props) {
   );
 }
 
+function Minus(props) {
+  return (
+    <IconBase {...props}>
+      <line x1="5" y1="12" x2="19" y2="12" />
+    </IconBase>
+  );
+}
+
+// A cart/bag glyph used by the shop cart (drawn to match the hand-drawn
+// line-icon set, not a reproduction of SHEIN's or any other logo).
+function ShoppingBag(props) {
+  return (
+    <IconBase {...props}>
+      <path d="M6 8h12l1.2 12.2A2 2 0 0117.2 22H6.8a2 2 0 01-2-1.8L6 8z" />
+      <path d="M9 10V6a3 3 0 016 0v4" />
+    </IconBase>
+  );
+}
+
 function Trash2(props) {
   return (
     <IconBase {...props}>
