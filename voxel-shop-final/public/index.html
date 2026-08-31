@@ -11,9 +11,9 @@
   <link rel="icon" type="image/png" href="/logo.png" />
   <link rel="apple-touch-icon" href="/logo.png" />
 
-  <!-- Warm the connections to the CDN (React/Babel) and Google Fonts
-     early, so the actual downloads start sooner on a cold visit. -->
-  <link rel="preconnect" href="https://unpkg.com" crossorigin />
+  <!-- Warm the connection to Google Fonts early, so the actual
+     download starts sooner on a cold visit. (React/Babel are
+     same-origin /vendor files now — no preconnect needed.) -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 
@@ -86,13 +86,17 @@
   </script>
   <div id="root"></div>
 
-  <!-- React itself, loaded straight from a CDN — no npm install, no build step. -->
-  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <!-- React and Babel are SELF-HOSTED from /vendor (exact pinned
+       versions, downloaded into the repo) — the site loads zero
+       third-party scripts, so a compromised CDN can never inject
+       code into this page, and the CSP allows no script origins
+       beyond 'self'. -->
+  <script src="/vendor/react.production.min.js"></script>
+  <script src="/vendor/react-dom.production.min.js"></script>
 
   <!-- Lets the browser understand the JSX (the <LikeThis /> tags) in the
        files below, on the fly, without a separate build step. -->
-  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="/vendor/babel.min.js"></script>
 
   <script>
     // Load order matters here: each file uses things defined in the

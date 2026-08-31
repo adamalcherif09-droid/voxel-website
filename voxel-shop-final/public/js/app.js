@@ -108,6 +108,30 @@ function App() {
     });
   }, []);
 
+  // Seasonal look: the owner picks a theme in Content > "Seasonal look";
+  // it is applied here as a data-theme attribute on <html> and the CSS
+  // in styles.css re-skins the palette. Unknown/missing values fall
+  // back to the default look — a corrupted content document can never
+  // break the site's appearance.
+  React.useEffect(function () {
+    try {
+      var themeId = content.theme;
+      if (themeId && isKnownTheme(themeId) && themeId !== "default") {
+        document.documentElement.setAttribute("data-theme", themeId);
+      } else {
+        document.documentElement.removeAttribute("data-theme");
+      }
+      var meta = document.querySelector('meta[name="theme-color"]');
+      if (meta) {
+        var match = null;
+        for (var i = 0; i < SITE_THEMES.length; i++) {
+          if (SITE_THEMES[i].id === themeId) { match = SITE_THEMES[i]; break; }
+        }
+        meta.setAttribute("content", match ? match.canvas : "#d5c4ba");
+      }
+    } catch (e) { /* theme is cosmetic — never block rendering */ }
+  }, [content.theme]);
+
   var _reauthHint = React.useState(false); var reauthHint = _reauthHint[0]; var setReauthHint = _reauthHint[1];
   var pendingWriteRef = React.useRef(null);
 
@@ -284,7 +308,8 @@ function App() {
     };
     setInquiries(function (prev) { return [entry].concat(prev); });
     saveInquiryRemote(entry);
-    apiPingDiscord("New cart order via " + channel + ": " + entry.note);
+    // Discord notification is sent by the SERVER from the sanitized
+    // entry — the browser never talks to the webhook path at all.
   }
   function handleCartCheckout() {
     // The drawer's checkout is a real link the cart computed at render
@@ -327,7 +352,18 @@ function App() {
     // simultaneous customers can't erase each other's entries.
     setInquiries(function (prev) { return [entry].concat(prev); });
     saveInquiryRemote(entry);
-    apiPingDiscord("New inquiry via " + channel + ": " + entry.label + (entry.note ? " — " + entry.note : ""));
+    // Discord notification is sent by the SERVER from the sanitized
+    // entry — the browser never talks to the webhook path at all.
+  }
+
+  function deleteInquiry(id) {
+    var next = inquiries.filter(function (i) { return i && i.id !== id; });
+    setInquiries(next);
+    return guardedSave("voxel-inquiries", next);
+  }
+  function clearInquiries() {
+    setInquiries([]);
+    return guardedSave("voxel-inquiries", []);
   }
 
   function addCategory(name) {
@@ -435,6 +471,7 @@ function App() {
         {view === "admin-gate" && <AdminGate security={settings.security || DEFAULT_SECURITY} notice={reauthHint} onSuccess={handleGateSuccess} />}
         {view === "admin" && isAdmin && (
           <AdminView tab={adminTab} setTab={setAdminTab} inquiries={inquiries}
+            deleteInquiry={deleteInquiry} clearInquiries={clearInquiries}
             categories={categories} models={models} addCategory={addCategory} renameCategory={renameCategory} deleteCategory={deleteCategory}
             addModel={addModel} updateModel={updateModel} deleteModel={deleteModel} toggleFeatured={toggleFeatured} importModels={importModels}
             settings={settings} updateSettings={persistSettings} content={content} updateContent={persistContent} goHome={goHome} onSignOut={handleLogout} />
@@ -504,4 +541,4 @@ function App() {
 
 var rootEl = document.getElementById("root");
 var root = ReactDOM.createRoot(rootEl);
-root.render(<App />);
+root.render(<ErrorBoundary><App /></ErrorBoundary>);

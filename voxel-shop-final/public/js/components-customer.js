@@ -73,7 +73,7 @@ function Footer(props) {
   return (
     <footer className="mt-20 liquid-glass">
       <div className="max-w-6xl mx-auto px-5 sm:px-8 py-8 flex flex-col sm:flex-row items-center justify-between gap-3 text-sm" style={{ color: "var(--ink-dim)" }}>
-        <span onClick={handleSecretClick} style={{ cursor: "default", userSelect: "none" }}>
+        <span onClick={handleSecretClick} className="voxel-footer-tag" style={{ cursor: "default", userSelect: "none" }}>
           {content.businessName} — {content.footerTagline}
         </span>
         {hasAnything && (
@@ -90,6 +90,75 @@ function Footer(props) {
   );
 }
 
+// Share a design: on phones uses the native share sheet (WhatsApp,
+// Instagram, Bluetooth...), on desktop copies the direct link to the
+// model's own page (/?model=<id>), which any visitor opening later
+// sees as an auto-opened detail popup. Handles clipboard fallbacks
+// for browsers that block either path.
+function ShareButton(props) {
+  var model = props.model;
+  var _copied = React.useState(false); var copied = _copied[0]; var setCopied = _copied[1];
+  var timerRef = React.useRef(null);
+  React.useEffect(function () {
+    return function () { if (timerRef.current) clearTimeout(timerRef.current); };
+  }, []);
+  function flash() {
+    setCopied(true);
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(function () { setCopied(false); }, 2000);
+  }
+  function fallbackCopy() {
+    var ok = false;
+    try {
+      var ta = document.createElement("textarea");
+      ta.value = modelUrl;
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.select();
+      ok = document.execCommand("copy");
+      document.body.removeChild(ta);
+    } catch (e) { ok = false; }
+    if (ok) flash();
+    else window.prompt("Copy this link:", modelUrl);
+  }
+  function share() {
+    if (!model || !model.id) return;
+    if (navigator.share) {
+      navigator.share({
+        title: model.name || "Voxel design",
+        text: "Check out \"" + (model.name || "this design") + "\"",
+        url: modelUrl,
+      }).catch(function () { /* visitor closed the share sheet — nothing to do */ });
+      return;
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(modelUrl).then(flash, fallbackCopy);
+    } else {
+      fallbackCopy();
+    }
+  }
+  var modelUrl = window.location.origin + "/?model=" + encodeURIComponent(model ? model.id : "");
+  if (props.compact) {
+    return (
+      <button
+        onClick={function (e) { e.stopPropagation(); share(); }}
+        aria-label={copied ? "Link copied" : "Share this design"}
+        title={copied ? "Link copied!" : "Share"}
+        className="liquid-glass voxel-tilt cursor-pointer border-0 rounded-md flex items-center justify-center flex-shrink-0"
+        style={{ width: 34, height: 34, color: "var(--brass-text)" }}
+      >
+        {copied ? <LinkIcon size={14} /> : <ShareIcon size={14} />}
+      </button>
+    );
+  }
+  return (
+    <SecondaryButton className="w-full" icon={copied ? LinkIcon : ShareIcon} onClick={share}>
+      {copied ? "Link copied!" : "Share this design"}
+    </SecondaryButton>
+  );
+}
+
 function ModelCard(props) {
   var model = props.model;
   var content = props.content;
@@ -102,7 +171,7 @@ function ModelCard(props) {
     >
       <div className="flex items-center justify-center" style={{ background: "var(--panel-2)", minHeight: model.image ? undefined : 140, position: "relative" }}>
         {model.image ? (
-          <img src={model.image} alt={model.name} style={{ width: "100%", height: "auto", display: "block" }} />
+          <img src={model.image} alt={model.name} loading="lazy" decoding="async" style={{ width: "100%", height: "auto", display: "block" }} />
         ) : (
           <ImageIcon size={26} style={{ color: "var(--ink-dim)" }} />
         )}
@@ -130,13 +199,16 @@ function ModelCard(props) {
           <span className="font-mono-ac text-xs sm:text-sm" style={{ color: "var(--ink)" }}>
             {model.price ? formatPriceDisplay(model.price, content) : "Ask for price"}
           </span>
-          <button
-            onClick={function (e) { e.stopPropagation(); props.onOrder(); }}
-            className="liquid-glass tint-teal voxel-tilt text-xs sm:text-sm font-medium px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-md cursor-pointer border-0"
-            style={{ color: "var(--canvas)" }}
-          >
-            Order now
-          </button>
+          <div className="flex items-center gap-2">
+            <ShareButton model={model} compact />
+            <button
+              onClick={function (e) { e.stopPropagation(); props.onOrder(); }}
+              className="liquid-glass tint-teal voxel-tilt text-xs sm:text-sm font-medium px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-md cursor-pointer border-0"
+              style={{ color: "var(--canvas)" }}
+            >
+              Order now
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -170,7 +242,7 @@ function RecentPrintsWall(props) {
           {track.map(function (p, i) {
             return (
               <figure key={p.id + "-" + i} className="voxel-marquee-item">
-                <img src={p.image} alt={p.caption || "Recent print"} />
+                <img src={p.image} alt={p.caption || "Recent print"} loading="lazy" decoding="async" />
                 {p.caption ? <figcaption>{p.caption}</figcaption> : null}
               </figure>
             );
@@ -278,7 +350,7 @@ function HomeView(props) {
       )}
 
       <section className="pb-16">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-5 p-6 sm:p-8 rounded-lg" style={{ border: "1px dashed var(--brass)", background: "rgba(230, 219, 211, 0.62)" }}>
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-5 p-6 sm:p-8 rounded-lg" style={{ border: "1px dashed var(--brass)", background: "var(--cta-soft)" }}>
           <div>
             <div className="font-display text-lg" style={{ color: "var(--ink)" }}>{content.customCtaHeading}</div>
             <p className="text-sm mt-1 max-w-md" style={{ color: "var(--ink-dim)" }}>{content.customCtaBody}</p>
@@ -474,6 +546,7 @@ function ModelDetailPopup(props) {
               <PrimaryButton className="w-full" onClick={props.onOrder}>Order now</PrimaryButton>
             </div>
           </div>
+          <ShareButton model={model} />
         </div>
       </div>
     </div>
@@ -507,6 +580,8 @@ function OrderContactPopup(props) {
   }
   function handleInstagramClick() {
     props.onLogInquiry("instagram");
+    // Match the WhatsApp flow: the choice was made, so close the popup.
+    props.onClose();
   }
   function copyMessage() {
     function fallback() {

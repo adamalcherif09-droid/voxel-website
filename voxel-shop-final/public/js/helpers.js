@@ -38,7 +38,12 @@ var DEFAULT_CONTENT = {
   howItWorksStep3Title: "Printed & ready",
   howItWorksStep3Body: "Most orders are finished and handed over within a few days.",
   showNewBadge: true,
-  newBadgeDays: "7",
+  newBadgeDays: "14",
+  // Which seasonal look the site wears. One of SITE_THEMES ids below —
+  // "default" is the everyday appearance; anything else is a purely
+  // cosmetic re-skin (colors only) the owner can switch from the
+  // dashboard's Content tab.
+  theme: "default",
   showRecentPrints: true,
   recentPrintsEyebrow: "Recent prints",
   recentPrintsSpeed: "2.6",
@@ -70,6 +75,39 @@ var ALL_DESIGNS_CATEGORY = { id: ALL_DESIGNS_CATEGORY_ID, name: "All Designs" };
 // quietly outgrow what the server accepts in one request.
 var RECENT_PRINTS_MAX = 40;
 
+/* ---------------------------------------------------------
+    Seasonal theme variants — chosen by the owner from
+    Content > "Seasonal look". Each entry only re-skins COLORS
+    via the [data-theme] CSS overrides in styles.css; layout,
+    features, and behavior are untouched. "default" removes
+    the attribute entirely and restores the everyday palette.
+    Every theme keeps a light canvas with dark ink, so text
+    contrast and the hardcoded button inks stay safe.
+    swatch: [canvas, accent, secondary] used by the picker UI.
+--------------------------------------------------------- */
+var SITE_THEMES = [
+  { id: "default", label: "Default", desc: "The everyday Voxel look", canvas: "#d5c4ba", accent: "#b58763", second: "#0f212b" },
+  { id: "christmas", label: "Christmas", desc: "Pine green & festive red", canvas: "#e8efe6", accent: "#a93226", second: "#1e4633" },
+  { id: "newyear", label: "New Year", desc: "Ivory, gold & midnight", canvas: "#e9edf2", accent: "#a8842c", second: "#1b2a3d" },
+  { id: "valentine", label: "Valentine's", desc: "Blush & rose", canvas: "#f7e8ea", accent: "#b04a5a", second: "#4a2432" },
+  { id: "easter", label: "Easter", desc: "Spring lilac & meadow", canvas: "#eef0e4", accent: "#8a7fb5", second: "#3f6f5f" },
+  { id: "ramadan", label: "Ramadan", desc: "Warm ivory & lantern gold", canvas: "#ece5d3", accent: "#a07d2e", second: "#1f2d4d" },
+  { id: "eid", label: "Eid", desc: "Festive green & cream", canvas: "#e9f0e4", accent: "#2e7d4f", second: "#143d28" },
+  { id: "halloween", label: "Halloween", desc: "Pumpkin & dusk purple", canvas: "#eee9e1", accent: "#c2610f", second: "#3f2a55" },
+  { id: "mothersday", label: "Mother's Day", desc: "Soft rose & mauve", canvas: "#f7e9ee", accent: "#b05a7f", second: "#5a2a3f" },
+  { id: "fathersday", label: "Father's Day", desc: "Navy & steel blue", canvas: "#e9edf1", accent: "#35548a", second: "#5a6d84" },
+  { id: "independenceday", label: "Independence Day", desc: "Flag red & cedar green", canvas: "#f4ecec", accent: "#b02020", second: "#2a5540" },
+  { id: "graduation", label: "Graduation", desc: "Maroon & academic gold", canvas: "#eceade", accent: "#7a2f3f", second: "#8a6d1f" },
+  { id: "backtoschool", label: "Back to School", desc: "School blue & pencil gold", canvas: "#eef0f4", accent: "#3f62a8", second: "#b58a1f" },
+  { id: "spring", label: "Spring", desc: "Fresh meadow green", canvas: "#edf3e6", accent: "#5a8f3c", second: "#2a6b52" },
+  { id: "summer", label: "Summer", desc: "Sea blue & sunset coral", canvas: "#e6f0f4", accent: "#1a7fa8", second: "#c96f2d" },
+  { id: "autumn", label: "Autumn", desc: "Harvest orange & walnut", canvas: "#f2e8dc", accent: "#b56a1f", second: "#5d4426" },
+  { id: "winter", label: "Winter", desc: "Frost blue & slate", canvas: "#e8edf2", accent: "#4a7ba6", second: "#2d4a63" },
+];
+function isKnownTheme(id) {
+  return SITE_THEMES.some(function (t) { return t.id === id; });
+}
+
 // A model counts as NEW when it was added to the catalog within the
 // owner-configurable window (Content tab), one week by default — past
 // that, the tag stops showing so "New" always means genuinely fresh.
@@ -82,13 +120,15 @@ function isNewModel(model, days) {
 
 var ALLOWED_FILE_EXTENSIONS = [".stl", ".3mf", ".step", ".stp", ".obj"];
 
-// Product photos: 720px / q0.68 keeps cards and the detail popup sharp
-// while staying far smaller than the previous 800px / q0.72 — the whole
-// catalog lives inside one database document, so every kilobyte counts
-// on the free tier. Logos keep a larger PNG path (transparency + crisp
-// small-size detail matter more there than bytes).
-var PRODUCT_IMAGE_MAX_DIM = 720;
-var PRODUCT_IMAGE_JPEG_QUALITY = 0.68;
+// Product photos: 640px / q0.62 is the sweet spot for this host — cards
+// and the detail popup stay sharp while the whole catalog (planned: up
+// to ~500 models) lives inside ONE database document on a 512MB Render
+// instance. Every kilobyte per photo is multiplied by every model, so
+// this is the single biggest lever on memory and load time. Logos keep
+// a larger PNG path (transparency + crisp small-size detail matter
+// more there than bytes).
+var PRODUCT_IMAGE_MAX_DIM = 640;
+var PRODUCT_IMAGE_JPEG_QUALITY = 0.62;
 var LOGO_IMAGE_MAX_DIM = 500;
 
 function isAllowedFile(name) {
@@ -233,13 +273,16 @@ function apiLogout() {
 }
 
 // Exchanges the raw passcode for a short-lived server-side admin
-// session. Returns the token, or null if the server couldn't be
-// reached / rejected it — callers proceed gracefully either way.
-function apiAuth(password) {
+// session. The verified shape combination travels along — the server
+// treats combo + passcode together as the credential, so knowing the
+// passcode alone is not enough. Returns the token, or null if the
+// server couldn't be reached / rejected it — callers proceed
+// gracefully either way.
+function apiAuth(password, combo) {
   return fetch("/api/auth", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ password: password }),
+    body: JSON.stringify({ password: password, combo: combo || [] }),
   })
     .then(function (res) { return res.ok ? res.json() : null; })
     .then(function (json) {
@@ -255,14 +298,14 @@ function apiAuth(password) {
 // a hard deadline so a stalled server (Render's free tier cold-starts a
 // sleeping instance — that first request can sit for a while) can never
 // freeze a UI button on "Checking…".
-function apiAuthDetailed(password) {
+function apiAuthDetailed(password, combo) {
   var ctrl = (typeof AbortController !== "undefined") ? new AbortController() : null;
   var timer = ctrl ? setTimeout(function () { ctrl.abort(); }, 15000) : null;
   var clearTimer = function () { if (timer) { clearTimeout(timer); timer = null; } };
   return fetch("/api/auth", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ password: password }),
+    body: JSON.stringify({ password: password, combo: combo || [] }),
     signal: ctrl ? ctrl.signal : undefined,
   })
     .then(function (res) {
@@ -272,6 +315,20 @@ function apiAuthDetailed(password) {
       });
     })
     .catch(function () { clearTimer(); return { status: 0, ok: false, token: null, error: "network", retryAfterSec: null }; });
+}
+
+// Asks the server whether the pressed shape sequence is the right one.
+// The sequence is checked ONLY here (server-side) — no API response
+// ever contains the combination, so nothing a visitor can read
+// reveals it. Resolves to true when the server accepts the sequence.
+function apiGateCombo(combo) {
+  return fetch("/api/gate", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ combo: combo || [] }),
+  })
+    .then(function (res) { return res.ok; })
+    .catch(function () { return false; });
 }
 
 // Resolves to { ok: true, value: parsedValueOrNullOrCorruptFlaggedFalse }
@@ -347,14 +404,16 @@ function apiGetInquiries() {
     .catch(function () { return { ok: false, value: null }; });
 }
 
-// Discord notifications are relayed by the server: the webhook URL
-// lives only there, so visitors can never read, spam, or delete it.
+// Owner-only Discord test ping through /api/admin/test-ping, which
+// requires the admin session. There is no public ping endpoint: the
+// server itself notifies Discord when a customer logs an inquiry, so
+// arbitrary visitor text can never reach the webhook.
 // Resolves to true when the ping was delivered.
-function apiPingDiscord(content) {
-  return fetch("/api/ping-discord", {
+function apiTestPingDiscord() {
+  return fetch("/api/admin/test-ping", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ content: String(content || "").slice(0, 500) }),
+    headers: { "Content-Type": "application/json", "x-voxel-token": adminApiToken || "" },
+    body: JSON.stringify({}),
   })
     .then(function (res) { return res.ok ? res.json() : { ok: false }; })
     .then(function (json) { return !!(json && json.ok); })

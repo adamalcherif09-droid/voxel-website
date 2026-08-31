@@ -4,7 +4,7 @@
   "description": "Voxel — a 3D print shop website with a built-in owner dashboard.",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node --max-old-space-size=384 server.js"
   },
   "engines": {
     "node": ">=18"

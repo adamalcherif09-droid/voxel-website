@@ -128,3 +128,46 @@ function SkeletonScreen() {
     </div>
   );
 }
+
+// Error boundary — if ANY component ever throws during render, React
+// unmounts the whole tree and the visitor sees a blank white page.
+// This catches the crash at the top, keeps the site's look, and offers
+// a one-click recovery instead of a dead screen.
+// NOTE: declared via a `var` (a class EXPRESSION) rather than a bare
+// `class` declaration — the site compiles JSX on the fly and runs each
+// file through an indirect eval, where top-level `let`/`const`/`class`
+// bindings don't leak into the global scope. A `var` does, exactly like
+// the rest of these files' `function` components, so app.js can reach
+// this component reliably.
+var ErrorBoundary = class extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false };
+  }
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+  componentDidCatch(error, info) {
+    // Detail goes to the console for debugging; the visitor only sees
+    // the friendly recovery screen below.
+    console.error("UI crash caught by error boundary:", error, info);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="voxel-root">
+          <div className="max-w-md mx-auto px-6 py-24 text-center">
+            <div className="font-display text-xl" style={{ color: "var(--ink)" }}>Something glitched on the page</div>
+            <p className="text-sm mt-3" style={{ color: "var(--ink-dim)" }}>
+              Don't worry — your cart and the shop's data are safe. Reloading the page fixes this almost every time.
+            </p>
+            <div className="mt-6">
+              <PrimaryButton onClick={function () { window.location.reload(); }}>Reload the page</PrimaryButton>
+            </div>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+};

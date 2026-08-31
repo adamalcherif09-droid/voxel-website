@@ -11,13 +11,19 @@ app.disable("x-powered-by");
 // hop — this makes req.ip / X-Forwarded-For accurate for rate limiting.
 app.set("trust proxy", 1);
 // gzip shrinks API responses a lot — the catalog carries embedded
-// photos as base64 text, which compresses roughly 25-35% on the wire.
-app.use(compression());
-// Catalog entries include compressed photos as text, so allow a generous
-// body size for the admin's storage writes. Every other API route takes
-// only tiny JSON (auth, inquiries, pings, handover) — a tight limit there
-// keeps a multi-megabyte flood from landing on the public endpoints.
-app.use("/api/storage", express.json({ limit: "15mb" }));
+// photos as base64 text. Level 1 (instead of the default 6) cuts CPU
+// dramatically with only a modest size penalty: on a 512MB free-tier
+// host, CPU is scarcer than a few extra response bytes.
+app.use(compression({ level: 1 }));
+// Catalog entries include compressed photos as text, so allow a
+// generous body size for the admin's storage writes. SIZED FOR THE
+// CATALOG PLAN: ~500 models x ~120KB of base64 photo each is roughly
+// 60MB, so 80mb leaves headroom — with the old 15mb limit the owner
+// would have been locked out of saving at around 150 models. Every
+// other API route takes only tiny JSON (auth, inquiries, pings,
+// handover) — a tight limit there keeps a multi-megabyte flood from
+// landing on the public endpoints.
+app.use("/api/storage", express.json({ limit: "80mb" }));
 app.use("/api", express.json({ limit: "32kb" }));
 
 /* ---------------------------------------------------------
@@ -34,7 +40,7 @@ app.use((req, res, next) => {
     "Content-Security-Policy",
     [
       "default-src 'self'",
-      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://unpkg.com",
+      "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "font-src https://fonts.gstatic.com",
       "img-src 'self' data: blob: https:",
@@ -42,12 +48,17 @@ app.use((req, res, next) => {
       "connect-src 'self' https://api.microlink.io",
       "object-src 'none'",
       "base-uri 'self'",
+      "form-action 'self'",
       "frame-ancestors 'none'",
     ].join("; ")
   );
   res.setHeader("X-Content-Type-Options", "nosniff");
   res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
   res.setHeader("X-Frame-Options", "DENY");
+  // Isolates this page's window from cross-origin openers/popups, and
+  // kills legacy Adobe Flash/PDF cross-domain policy file probing.
+  res.setHeader("Cross-Origin-Opener-Policy", "same-origin");
+  res.setHeader("X-Permitted-Cross-Domain-Policies", "none");
   // HSTS only when the request actually arrived over TLS (Render
   // terminates TLS and forwards https requests with the proto header;
   // plain local http stays unstoppable). Browsers ignore HSTS over
@@ -444,6 +455,26 @@ function isDiscordWebhookUrl(raw) {
 }
 
 const DATA_DIR = path.join(__dirname, "data");
+
+// Server-side verification of the secret shape sequence. The combo is
+// never shipped to browsers, so it must be checked HERE. Comparison is
+// timing-safe: both sequences are hashed first so the digest lengths
+// always match, then compared with timingSafeEqual. A missing/corrupt
+// stored combo falls back to the shipped default rather than locking
+// the owner out of a half-written settings document.
+const DEFAULT_COMBO = ["circle", "triangle", "square", "diamond"];
+function comboMatches(stored, candidate) {
+  const expected = Array.isArray(stored) && stored.length >= 3 ? stored : DEFAULT_COMBO;
+  if (!Array.isArray(candidate) || candidate.length !== expected.length) return false;
+  const clean = [];
+  for (const s of candidate) {
+    if (typeof s !== "string" || s.length > 20) return false;
+    clean.push(s);
+  }
+  const h1 = crypto.createHash("sha256").update(expected.join("|")).digest();
+  const h2 = crypto.createHash("sha256").update(clean.join("|")).digest();
+  try { return crypto.timingSafeEqual(h1, h2); } catch (e) { return false; }
+}
 const DATA_FILE = path.join(DATA_DIR, "store.json");
 
 /* ---------------------------------------------------------
@@ -479,37 +510,58 @@ function writeLocalStore(store) {
   fs.writeFileSync(DATA_FILE, JSON.stringify(store), "utf8");
 }
 
+// Raw-document cache. The catalog is ONE big JSON string that every
+// visitor requests on every page load; without this cache each request
+// re-reads and re-allocates the full multi-megabyte document — a serious
+// memory/CPU tax on a 512MB host once the catalog reaches a few hundred
+// models. The cache holds each key's latest raw string (one shared
+// instance, instead of a fresh copy per request) and is updated by
+// every storageSet, so it can never serve stale data. Single-instance
+// hosting only (Render free tier), which is already what the in-memory
+// rate limiting assumes.
+const rawDocCache = new Map(); // key -> raw string
+const RAW_CACHE_MAX_BYTES = 100 * 1024 * 1024; // safety valve: never cache something absurd
+
 async function storageGet(key) {
+  if (rawDocCache.has(key)) return rawDocCache.get(key);
+  let value = null;
   if (mongoCollection) {
     // Each key ("voxel-catalog", "voxel-settings", etc.) is stored
     // as its own document: { _id: key, value: "<json string>" }.
     const doc = await mongoCollection.findOne({ _id: key });
-    return doc && typeof doc.value === "string" ? doc.value : null;
-  }
-  if (db) {
+    value = doc && typeof doc.value === "string" ? doc.value : null;
+  } else if (db) {
     // @replit/database's client.get() resolves to a result object —
     // { ok: true, value: "..." } on success, or { ok: false, error }
     // if the key doesn't exist or the request failed — never the
     // stored value directly. Unwrap it here.
     const result = await db.get(key);
-    if (!result || !result.ok || result.value === undefined) return null;
-    return result.value;
+    if (!result || !result.ok || result.value === undefined) value = null;
+    else value = result.value;
+  } else {
+    const store = readLocalStore();
+    value = Object.prototype.hasOwnProperty.call(store, key) ? store[key] : null;
   }
-  const store = readLocalStore();
-  return Object.prototype.hasOwnProperty.call(store, key) ? store[key] : null;
+  if (typeof value === "string" && value.length <= RAW_CACHE_MAX_BYTES) {
+    rawDocCache.set(key, value);
+  }
+  return value;
 }
 async function storageSet(key, value) {
   if (mongoCollection) {
     await mongoCollection.updateOne({ _id: key }, { $set: { value } }, { upsert: true });
-    return;
-  }
-  if (db) {
+  } else if (db) {
     await db.set(key, value);
-    return;
+  } else {
+    const store = readLocalStore();
+    store[key] = value;
+    writeLocalStore(store);
   }
-  const store = readLocalStore();
-  store[key] = value;
-  writeLocalStore(store);
+  if (typeof value === "string" && value.length <= RAW_CACHE_MAX_BYTES) {
+    rawDocCache.set(key, value);
+  } else {
+    rawDocCache.delete(key);
+  }
 }
 
 /* ---------------------------------------------------------
@@ -644,7 +696,7 @@ async function seedMissingKeys() {
    of saving things to the visitor's own browser, so every
    visitor sees the exact same catalog and settings.
 --------------------------------------------------------- */
-app.get("/api/storage/:key", async (req, res) => {
+app.get("/api/storage/:key", rateLimit("read", 240, 60 * 1000), async (req, res) => {
   try {
     const key = req.params.key;
     if (!STORAGE_KEYS.includes(key)) {
@@ -669,10 +721,18 @@ app.get("/api/storage/:key", async (req, res) => {
         const obj = JSON.parse(value);
         const hadWebhook = typeof obj.webhookUrl === "string" && obj.webhookUrl.length > 0;
         delete obj.webhookUrl;
-        if (obj.security) {
-          delete obj.security.passcodeHash;
-          delete obj.security.passcode;
-        }
+        // The security section is reduced to what the PUBLIC page can
+        // not live without: how many footer clicks open the door, and
+        // how many shapes the gate asks for (a bare count, NOT the
+        // sequence itself). The actual combination never leaves the
+        // server — the gate verifies it against /api/gate, so reading
+        // the site's JS or API responses tells an attacker nothing
+        // about which shapes to press.
+        const sec = obj.security && typeof obj.security === "object" ? obj.security : {};
+        obj.security = {
+          triggerClicks: Number.isFinite(sec.triggerClicks) ? sec.triggerClicks : 5,
+          comboLength: Array.isArray(sec.combo) && sec.combo.length >= 3 ? sec.combo.length : 4,
+        };
         obj._webhookSet = hadWebhook;
         value = JSON.stringify(obj);
       } catch (e) { /* corrupt doc — return as-is, frontend treats it as unreadable */ }
@@ -793,11 +853,26 @@ app.post("/api/storage/:key", async (req, res) => {
         } else {
           incoming.webhookUrl = typeof stored.webhookUrl === "string" ? stored.webhookUrl : "";
         }
+        // The shape combination itself is never sent to browsers (the
+        // public GET strips it down to a bare comboLength), so a plain
+        // settings round-trip would erase it. Same contract as the
+        // webhook: preserved from the store unless the dashboard marks
+        // an intentional change with _updateCombo — the validation
+        // below then clamps the incoming value.
+        if (incoming.security._updateCombo === true) {
+          delete incoming.security._updateCombo;
+        } else {
+          incoming.security.combo =
+            stored.security && Array.isArray(stored.security.combo) && stored.security.combo.length
+              ? stored.security.combo.slice(0, 6)
+              : ["circle", "triangle", "square", "diamond"];
+        }
       } else {
         // No stored settings (shouldn't happen — the server seeds them)
         // — treat as a fresh setup so a write can't skip the handover.
         incoming.security = incoming.security && typeof incoming.security === "object" ? incoming.security : {};
         delete incoming.security._updatePasscode;
+        delete incoming.security._updateCombo;
         incoming.security._setupPending = true;
         incoming.security._passcodeChanged = false;
         delete incoming._updateWebhook;
@@ -865,6 +940,34 @@ app.post("/api/storage/:key", async (req, res) => {
    below). Same applies to the ancient fixed default if a
    pre-hardening install still carries it.
 -------------------------------------------------------- */
+/* ---------------------------------------------------------
+   Shape-gate verification — the first door before the
+   passcode. The browser collects the shapes the visitor
+   presses and asks the server whether the sequence matches;
+   the sequence itself never ships in any API response, so
+   nothing a visitor can read reveals it. Rate-limited with
+   its own bucket (combo guessing is cheap to type, so it
+   gets a tight budget) plus the same global-burst cap idea
+   as the inquiry/ping relays.
+--------------------------------------------------------- */
+app.post("/api/gate", rateLimit("gate", 30, 15 * 60 * 1000), async (req, res) => {
+  try {
+    if (!globalBurst("gate", 600, 15 * 60 * 1000)) {
+      res.status(429).json({ error: "too_many_attempts" });
+      return;
+    }
+    const raw = await storageGet("voxel-settings");
+    let stored = null;
+    if (raw) { try { stored = JSON.parse(raw); } catch (e) { stored = null; } }
+    const sec = (stored && stored.security) || {};
+    const ok = comboMatches(sec.combo, req.body ? req.body.combo : null);
+    res.status(ok ? 200 : 401).json({ ok: ok });
+  } catch (e) {
+    console.error("gate failed:", e);
+    res.status(500).json({ error: "gate_failed" });
+  }
+});
+
 app.post("/api/auth", rateLimit("auth", 12, 15 * 60 * 1000), async (req, res) => {
   try {
     const ip = clientIp(req);
@@ -884,6 +987,16 @@ app.post("/api/auth", rateLimit("auth", 12, 15 * 60 * 1000), async (req, res) =>
     let stored = null;
     if (raw) { try { stored = JSON.parse(raw); } catch (e) { stored = null; } }
     const sec = (stored && stored.security) || {};
+    // The shape combination is part of the credential now: knowing the
+    // passcode alone is not enough, and calling /api/auth directly
+    // cannot skip the gate. A wrong combo counts as a failed login
+    // attempt (same jitter, same lockout bookkeeping).
+    if (!comboMatches(sec.combo, req.body ? req.body.combo : null)) {
+      await authJitterDelay();
+      noteAuthFailure(ip);
+      res.status(401).json({ error: "wrong_combo" });
+      return;
+    }
     const verdict = await verifyPasscode(storedCredential(stored, sec), password);
     if (!verdict.ok) {
       await authJitterDelay();
@@ -975,6 +1088,12 @@ app.post("/api/auth/change-default", rateLimit("auth", 12, 15 * 60 * 1000), asyn
     let stored = null;
     if (raw) { try { stored = JSON.parse(raw); } catch (e) { stored = null; } }
     const sec = (stored && stored.security) || {};
+    if (!comboMatches(sec.combo, req.body ? req.body.combo : null)) {
+      await authJitterDelay();
+      noteAuthFailure(ip);
+      res.status(401).json({ error: "wrong_combo" });
+      return;
+    }
     const setupPending = sec._setupPending === true;
     const legacyDefault = sec.passcodeHash === SEED_PASSCODE_HASH && sec._passcodeChanged !== true;
     if (!setupPending && !legacyDefault) {
@@ -1041,8 +1160,10 @@ app.post("/api/auth/logout", rateLimit("logout", 60, 15 * 60 * 1000), async (req
 /* ---------------------------------------------------------
    Public append-only inquiries — customers log an order attempt
    here. The server owns the list: it sanitizes each entry and
-   caps it at the most recent 200 so it can never grow unbounded
-   on the free database tier. Writes are serialized through a
+   caps it at the most recent 500 so it can never grow unbounded
+   on the free database tier (500 instead of a smaller number so
+   a junk flood cannot quickly push real orders out of the window).
+   Writes are serialized through a
    promise chain so two customers ordering at the same moment
    can no longer overwrite each other's entry (lost-update race).
    A global burst cap (independent of the per-IP limiter, so fake
@@ -1078,13 +1199,24 @@ app.post("/api/inquiries", rateLimit("inq", 20, 60 * 60 * 1000), async (req, res
       return { duplicate: true }; // already recorded — don't double-log
     }
     list.unshift(clean);
-    if (list.length > 200) list = list.slice(0, 200);
+    if (list.length > 500) list = list.slice(0, 500);
     await storageSet("voxel-inquiries", JSON.stringify(list));
     return { duplicate: false };
   });
   inquiryChain = op.catch(function () { /* keep the chain alive after failures */ });
   try {
     const result = await op;
+    if (!result.duplicate) {
+      // Discord notification, sent by the SERVER from the sanitized
+      // entry (never from the client): fire-and-forget, so a slow or
+      // missing webhook can't delay the customer's response and a
+      // Discord outage can't fail an order.
+      const kind = clean.type === "custom" ? "custom order" : clean.type === "cart" ? "cart order" : "order";
+      const msg = "New " + kind + " via " + clean.channel + ": " + clean.label
+        + (clean.note ? " — " + clean.note : "")
+        + (clean.fileName ? " (file: " + clean.fileName + ")" : "");
+      sendDiscord(msg).catch(function () { /* notification is best-effort */ });
+    }
     res.json({ ok: true, duplicate: result.duplicate });
   } catch (e) {
     console.error("inquiry save failed:", e);
@@ -1099,37 +1231,46 @@ app.post("/api/inquiries", rateLimit("inq", 20, 60 * 60 * 1000), async (req, res
    just tells the server what to say. Rate-limited and length-
    capped so it can't be abused as a spam cannon either.
 --------------------------------------------------------- */
-app.post("/api/ping-discord", rateLimit("ping", 15, 60 * 60 * 1000), async (req, res) => {
+/* ---------------------------------------------------------
+    Discord delivery. The webhook URL lives ONLY on the
+    server. Two callers, both controlled:
+      1. /api/inquiries — the server itself pings Discord
+         when a customer logs an order (fire-and-forget;
+         the customer's response never depends on Discord).
+      2. /api/admin/test-ping — the owner's dashboard test
+         button, which requires a valid admin session.
+    There is NO public ping endpoint anymore: an anonymous
+    visitor can no longer push arbitrary text into the
+    owner's Discord channel at all.
+--------------------------------------------------------- */
+async function sendDiscord(content) {
+  const raw = await storageGet("voxel-settings");
+  let stored = null;
+  if (raw) { try { stored = JSON.parse(raw); } catch (e) { stored = null; } }
+  const hook = stored && typeof stored.webhookUrl === "string" ? stored.webhookUrl.trim() : "";
+  if (!hook) return { ok: false, error: "no_webhook" };
+  // Defense in depth: even if an invalid URL was ever stored, never
+  // blind-POST to it (see the save-time allowlist).
+  if (!isDiscordWebhookUrl(hook)) return { ok: false, error: "invalid_webhook" };
+  const text = String(content || "").trim().slice(0, 500);
+  if (!text) return { ok: false, error: "empty_content" };
+  const r = await fetchWithTimeout(hook, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ content: text }),
+  }, 8000);
+  return { ok: r.ok };
+}
+
+app.post("/api/admin/test-ping", rateLimit("ping", 15, 60 * 60 * 1000), async (req, res) => {
+  // Owner-only. The old public /api/ping-discord let ANY visitor relay
+  // arbitrary 500-char messages into the owner's Discord channel
+  // (rate limits slowed that down but never stopped it); requiring the
+  // admin session closes the spam cannon completely.
+  if (!isAuthedAdmin(req)) return res.status(401).json({ ok: false, error: "unauthorized" });
   try {
-    if (!globalBurst("ping", 300, 60 * 60 * 1000)) {
-      res.status(429).json({ ok: false, error: "too_many_requests" });
-      return;
-    }
-    const raw = await storageGet("voxel-settings");
-    let stored = null;
-    if (raw) { try { stored = JSON.parse(raw); } catch (e) { stored = null; } }
-    const hook = stored && typeof stored.webhookUrl === "string" ? stored.webhookUrl.trim() : "";
-    if (!hook) {
-      res.json({ ok: false, error: "no_webhook" });
-      return;
-    }
-    // Defense in depth: even if an invalid URL was ever stored, never
-    // blind-POST to it (see the save-time allowlist).
-    if (!isDiscordWebhookUrl(hook)) {
-      res.json({ ok: false, error: "invalid_webhook" });
-      return;
-    }
-    const content = String((req.body && req.body.content) || "").trim().slice(0, 500);
-    if (!content) {
-      res.status(400).json({ ok: false, error: "empty_content" });
-      return;
-    }
-    const r = await fetchWithTimeout(hook, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ content: content }),
-    }, 8000);
-    res.json({ ok: r.ok });
+    const out = await sendDiscord("This is a test ping from your website.");
+    res.json({ ok: out.ok, error: out.error });
   } catch (e) {
     console.error("discord ping failed:", e);
     res.json({ ok: false, error: "ping_failed" });
@@ -1302,6 +1443,16 @@ app.get("/api/thingiverse-search", rateLimit("tv", 10, 60 * 60 * 1000), async (r
   }
 });
 
+/* ---------------------------------------------------------
+    Health check — a plain, free JSON liveness probe. Point an
+    uptime monitor (UptimeRobot etc.) at /api/health: it doubles
+    as a keep-warm ping for the free tier (no sleeping between
+    visitors) and a fast way to confirm a deploy came up clean.
+--------------------------------------------------------- */
+app.get("/api/health", function (req, res) {
+  res.json({ ok: true, uptimeSec: Math.round(process.uptime()) });
+});
+
 // Unknown /api/* paths answer with JSON, not the SPA fallback —
 // an API client should never receive HTML from this server.
 const ZIP_CRC_TABLE = (function () {
@@ -1318,64 +1469,103 @@ function zipCrc32(buf) {
   for (let i = 0; i < buf.length; i++) c = ZIP_CRC_TABLE[(c ^ buf[i]) & 0xff] ^ (c >>> 8);
   return (c ^ 0xffffffff) >>> 0;
 }
-// A dependency-free ZIP writer (stored + deflate) so the owner can grab
+// A dependency-free STREAMING ZIP writer (deflate) so the owner can grab
 // every film frame in one click for local reference or AI upscaling.
-function buildZip(entries) {
-  const localParts = [];
-  const centralParts = [];
-  let offset = 0;
-  for (const e of entries) {
-    const nameBuf = Buffer.from(e.name, "utf8");
-    const crc = zipCrc32(e.data);
-    const comp = zlib.deflateRawSync(e.data, { level: 6 });
-    const csize = comp.length, usize = e.data.length;
-    const lh = Buffer.alloc(30);
-    lh.writeUInt32LE(0x04034b50, 0);
-    lh.writeUInt16LE(20, 4); lh.writeUInt16LE(0x0800, 6); lh.writeUInt16LE(8, 8); // deflate
-    lh.writeUInt32LE(crc, 14);
-    lh.writeUInt32LE(csize, 18); lh.writeUInt32LE(usize, 22);
-    lh.writeUInt16LE(nameBuf.length, 26); lh.writeUInt16LE(0, 28);
-    localParts.push(lh, nameBuf, comp);
-    const ch = Buffer.alloc(46);
-    ch.writeUInt32LE(0x02014b50, 0);
-    ch.writeUInt16LE(20, 4); ch.writeUInt16LE(20, 6); ch.writeUInt16LE(0x0800, 8); ch.writeUInt16LE(8, 10);
-    ch.writeUInt32LE(crc, 16); ch.writeUInt32LE(csize, 20); ch.writeUInt32LE(usize, 24);
-    ch.writeUInt16LE(nameBuf.length, 28); ch.writeUInt32LE(0, 30); ch.writeUInt32LE(0, 34); ch.writeUInt32LE(0, 38);
-    ch.writeUInt32LE(offset, 42);
-    centralParts.push(ch, nameBuf);
-    offset += 30 + nameBuf.length + csize;
-  }
-  const cd = Buffer.concat(centralParts);
-  const eocd = Buffer.alloc(22);
-  eocd.writeUInt32LE(0x06054b50, 0);
-  eocd.writeUInt16LE(entries.length, 8); eocd.writeUInt16LE(entries.length, 10);
-  eocd.writeUInt32LE(cd.length, 12); eocd.writeUInt32LE(offset, 16); eocd.writeUInt16LE(0, 20);
-  return Buffer.concat(localParts.concat([cd, eocd]));
+// Frames are read, compressed, and flushed to the socket ONE AT A TIME,
+// so peak memory is a single frame (~300KB) instead of the whole
+// 20MB archive — on a 512MB host, two simultaneous full-archive builds
+// used to be enough to OOM-kill the instance.
+function streamZip(res, entries) {
+  return new Promise(function (resolve, reject) {
+    const central = [];
+    let offset = 0;
+    let idx = 0;
+    let fileCount = 0;
+    function fail(e) {
+      try { res.end(); } catch (e2) { /* socket already gone */ }
+      reject(e);
+    }
+    res.on("error", fail);
+    function next() {
+      if (idx >= entries.length) {
+        // Central directory + end-of-central-directory, then done.
+        // NOTE: the entry count is the number of FILES (central holds
+        // two buffers per file — the fixed header and the name) —
+        // writing central.length there made every unzipper see twice
+        // as many entries as exist and silently extract nothing.
+        const cd = Buffer.concat(central);
+        const eocd = Buffer.alloc(22);
+        eocd.writeUInt32LE(0x06054b50, 0);
+        eocd.writeUInt16LE(fileCount, 8); eocd.writeUInt16LE(fileCount, 10);
+        eocd.writeUInt32LE(cd.length, 12); eocd.writeUInt32LE(offset, 16); eocd.writeUInt16LE(0, 20);
+        res.write(cd);
+        res.write(eocd);
+        res.end();
+        resolve();
+        return;
+      }
+      const e = entries[idx++];
+      let data;
+      try { data = fs.readFileSync(e.path); } catch (err) {
+        next(); // frame vanished between readdir and read — skip it
+        return;
+      }
+      const nameBuf = Buffer.from(e.name, "utf8");
+      const crc = zipCrc32(data);
+      const comp = zlib.deflateRawSync(data, { level: 1 });
+      const csize = comp.length, usize = data.length;
+      data = null; // release the raw frame before flushing to the socket
+      const lh = Buffer.alloc(30);
+      lh.writeUInt32LE(0x04034b50, 0);
+      lh.writeUInt16LE(20, 4); lh.writeUInt16LE(0x0800, 6); lh.writeUInt16LE(8, 8); // deflate
+      lh.writeUInt32LE(crc, 14);
+      lh.writeUInt32LE(csize, 18); lh.writeUInt32LE(usize, 22);
+      lh.writeUInt16LE(nameBuf.length, 26); lh.writeUInt16LE(0, 28);
+      const ch = Buffer.alloc(46);
+      ch.writeUInt32LE(0x02014b50, 0);
+      ch.writeUInt16LE(20, 4); ch.writeUInt16LE(20, 6); ch.writeUInt16LE(0x0800, 8); ch.writeUInt16LE(8, 10);
+      ch.writeUInt32LE(crc, 16); ch.writeUInt32LE(csize, 20); ch.writeUInt32LE(usize, 24);
+      ch.writeUInt16LE(nameBuf.length, 28); ch.writeUInt32LE(0, 30); ch.writeUInt32LE(0, 34); ch.writeUInt32LE(0, 38);
+      ch.writeUInt32LE(offset, 42);
+      offset += 30 + nameBuf.length + csize;
+      central.push(ch, nameBuf);
+      fileCount++;
+      res.write(lh);
+      res.write(nameBuf);
+      // The write callback doubles as backpressure handling: the next
+      // frame is only read once this one has actually been flushed.
+      res.write(comp, function () { next(); });
+    }
+    next();
+  });
 }
 // One click = every background film frame as a ZIP. Owner-only: it's a
 // way to pull the full media set locally (Upscayl, previews, backups),
 // and the frames travel as files, so the archive endpoint re-reads them
 // from disk on demand instead of trusting any client-supplied paths.
-app.get("/api/media/film-archive", rateLimit("filmzip", 30, 60 * 60 * 1000), (req, res) => {
+app.get("/api/media/film-archive", rateLimit("filmzip", 30, 60 * 60 * 1000), async (req, res) => {
   if (!isAuthedAdmin(req)) return res.status(401).json({ error: "unauthorized" });
   const dir = (process.env.VOXEL_MEDIA_DIR || path.join(__dirname, "public", "media")) + path.sep + "film";
   let names;
   try { names = fs.readdirSync(dir).filter((n) => /^f\d{2}\.jpg$/.test(n)).sort(); } catch (e) { return res.status(404).json({ error: "no_film_frames" }); }
-  const entries = [];
-  for (const n of names) {
-    try { entries.push({ name: n, data: fs.readFileSync(path.join(dir, n)) }); } catch (e) {}
-  }
-  if (!entries.length) return res.status(404).json({ error: "no_film_frames" });
+  if (!names.length) return res.status(404).json({ error: "no_film_frames" });
   res.setHeader("Content-Type", "application/zip");
   res.setHeader("Content-Disposition", 'attachment; filename="voxel-film-frames.zip"');
   res.setHeader("Cache-Control", "no-store");
-  res.send(buildZip(entries));
+  try {
+    await streamZip(res, names.map(function (n) { return { name: n, path: path.join(dir, n) }; }));
+  } catch (e) {
+    console.error("film archive failed:", e);
+  }
 });
 app.use("/api", (req, res) => {
   res.status(404).json({ error: "not_found" });
 });
 
 app.use(express.static(path.join(__dirname, "public"), {
+  // Never serve dotfiles (.env, .git internals, etc.) even if one is
+  // ever accidentally dropped into public/.
+  dotfiles: "ignore",
   setHeaders: function (res, filePath) {
     // HTML must always be fresh so deploys show up immediately;
     // JS/CSS are fingerprint-free, so a SHORT cache keeps deploys
@@ -1390,6 +1580,7 @@ app.use(express.static(path.join(__dirname, "public"), {
 // index.html, since this is a single page that handles its own
 // navigation — this stops a page refresh from showing a 404.
 app.use((req, res) => {
+  res.setHeader("Cache-Control", "no-cache");
   res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
@@ -1426,8 +1617,43 @@ async function start() {
   // granted before a restart/redeploy keep working (see note above).
   await loadSessions();
 
-  app.listen(PORT, "0.0.0.0", () => {
+  const server = app.listen(PORT, "0.0.0.0", () => {
     console.log(`Voxel is running on port ${PORT}`);
+  });
+
+  // Graceful shutdown: Render sends SIGTERM on every deploy/restart.
+  // Without this, in-flight requests (an owner mid-save, a customer
+  // mid-order) are dropped mid-write. Stop accepting NEW connections,
+  // give live ones up to 10s to finish, then exit cleanly.
+  let shuttingDown = false;
+  function shutdown(signal) {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    console.log(signal + " received — finishing in-flight requests…");
+    server.close(function () {
+      console.log("Clean shutdown complete.");
+      process.exit(0);
+    });
+    // Hard deadline: a hung socket must not block the redeploy forever.
+    setTimeout(function () {
+      console.log("Shutdown deadline reached — exiting.");
+      process.exit(0);
+    }, 10000).unref();
+  }
+  process.on("SIGTERM", function () { shutdown("SIGTERM"); });
+  process.on("SIGINT", function () { shutdown("SIGINT"); });
+
+  // Unexpected promise rejections are logged with full context (they
+  // usually mean a database blip) but don't kill the server — the
+  // promise chains that matter already handle their own failures.
+  process.on("unhandledRejection", function (reason) {
+    console.error("Unhandled promise rejection:", reason);
+  });
+  // An uncaught exception means unknown program state: log it and exit
+  // so the platform restarts a clean process instead of limping along.
+  process.on("uncaughtException", function (err) {
+    console.error("Uncaught exception — exiting:", err);
+    process.exit(1);
   });
 }
 

@@ -279,3 +279,15 @@ function LinkIcon(props) {
     </IconBase>
   );
 }
+
+function ShareIcon(props) {
+  return (
+    <IconBase {...props}>
+      <circle cx="18" cy="5" r="3" />
+      <circle cx="6" cy="12" r="3" />
+      <circle cx="18" cy="19" r="3" />
+      <line x1="8.6" y1="10.5" x2="15.4" y2="6.5" />
+      <line x1="8.6" y1="13.5" x2="15.4" y2="17.5" />
+    </IconBase>
+  );
+}

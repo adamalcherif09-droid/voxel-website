@@ -19,24 +19,39 @@ function AdminGate(props) {
   var _setupError = React.useState(""); var setupError = _setupError[0]; var setSetupError = _setupError[1];
   var _setupChecking = React.useState(false); var setupChecking = _setupChecking[0]; var setSetupChecking = _setupChecking[1];
   var _setupMode = React.useState("fresh"); var setupMode = _setupMode[0]; var setSetupMode = _setupMode[1];
+  var _gateChecking = React.useState(false); var gateChecking = _gateChecking[0]; var setGateChecking = _gateChecking[1];
+  // The verified shape sequence is kept here so it can travel with the
+  // passcode (auth) and the setup handover — the server requires all
+  // three together. It is never displayed and never sent anywhere else.
+  var comboRef = React.useRef(null);
+  // How many shapes to collect comes from the server as a bare count;
+  // the sequence itself is verified server-side via /api/gate.
+  var comboLength = (sec && sec.comboLength) || (sec && sec.combo && sec.combo.length) || 4;
 
   function pressShape(shape) {
+    if (gateChecking) return;
     var next = comboProgress.concat([shape]);
-    var expected = sec.combo.slice(0, next.length);
-    var matches = next.every(function (s, i) { return s === expected[i]; });
-    if (!matches) {
-      setComboProgress([]);
-      setShake(true);
-      setTimeout(function () { setShake(false); }, 350);
+    if (next.length < comboLength) {
+      setComboProgress(next);
       return;
     }
-    if (next.length >= sec.combo.length) {
-      setComboProgress([]);
-      setError("");
-      setStage("password");
-      return;
-    }
+    // Sequence complete — the SERVER decides whether it's right. The
+    // old build matched locally against the shipped combination,
+    // which meant the answer was readable in the page's own data.
     setComboProgress(next);
+    setGateChecking(true);
+    apiGateCombo(next).then(function (ok) {
+      setGateChecking(false);
+      setComboProgress([]);
+      if (ok) {
+        comboRef.current = next;
+        setError("");
+        setStage("password");
+      } else {
+        setShake(true);
+        setTimeout(function () { setShake(false); }, 350);
+      }
+    });
   }
 
   function submitPassword() {
@@ -45,13 +60,23 @@ function AdminGate(props) {
     // The server is the single source of truth for the passcode — it
     // verifies and returns a short-lived admin session token. The hash
     // is never shipped to browsers, so it can't be brute-forced offline.
-    apiAuthDetailed(pw)
+    apiAuthDetailed(pw, comboRef.current)
       .then(function (r) {
         setChecking(false);
         if (r && r.token) {
           setAdminApiToken(r.token);
           setPw("");
           props.onSuccess();
+          return;
+        }
+        if (r && r.status === 401 && r.error === "wrong_combo") {
+          // The server rejected the shape sequence — straight back to
+          // the first door, same 3-strikes reset as a wrong passcode.
+          setPw("");
+          setAttempts(0);
+          setStage("combo");
+          setComboProgress([]);
+          setError("");
           return;
         }
         if (r && r.status === 403 && r.error === "setup_required") {
@@ -128,7 +153,7 @@ function AdminGate(props) {
     fetch("/api/auth/change-default", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ current: setupCurrent, newPassword: trimmed }),
+      body: JSON.stringify({ current: setupCurrent, newPassword: trimmed, combo: comboRef.current || [] }),
       signal: ctrl ? ctrl.signal : undefined,
     })
       .then(function (res) {
@@ -183,7 +208,7 @@ function AdminGate(props) {
             })}
           </div>
           <div className="flex items-center justify-center gap-2 mt-5">
-            {sec.combo.map(function (_, i) {
+            {Array.from({ length: comboLength }).map(function (_, i) {
               return <span key={i} style={{ width: 8, height: 8, borderRadius: "50%", background: i < comboProgress.length ? "var(--brass)" : "var(--line)", display: "inline-block" }} />;
             })}
           </div>
@@ -274,6 +299,20 @@ function AdminInquiries(props) {
   }
   return (
     <div className="flex flex-col gap-3">
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-mono-ac" style={{ color: "var(--ink-dim)" }}>
+          {inquiries.length + " " + (inquiries.length === 1 ? "inquiry" : "inquiries") + " — newest first"}
+        </span>
+        <SecondaryButton
+          onClick={function () {
+            if (window.confirm("Clear ALL " + inquiries.length + " inquiries? This can't be undone — copy any order details you still need first.")) {
+              props.onClear();
+            }
+          }}
+        >
+          Clear all
+        </SecondaryButton>
+      </div>
       {inquiries.map(function (i) {
         return (
           <div key={i.id} className="p-4 rounded-lg" style={{ background: "var(--panel)", border: "1px solid var(--line)" }}>
@@ -284,9 +323,21 @@ function AdminInquiries(props) {
                 {i.fileName && <div className="text-xs mt-1 font-mono-ac" style={{ color: "var(--ink-dim)" }}>File mentioned: {i.fileName}</div>}
                 <div className="text-xs mt-2" style={{ color: "var(--ink-dim)" }}>via {i.channel === "whatsapp" ? "WhatsApp" : "Instagram"} · {formatDate(i.createdAt)}</div>
               </div>
-              <span className="text-xs px-2.5 py-1 rounded-full font-mono-ac uppercase" style={{ background: i.channel === "whatsapp" ? "var(--teal-soft)" : "var(--brass-soft)", color: i.channel === "whatsapp" ? "var(--teal)" : "var(--brass-text)" }}>
-                {i.type === "custom" ? "custom" : i.type === "cart" ? "cart" : "catalog"}
-              </span>
+              <div className="flex flex-col items-end gap-2 flex-shrink-0">
+                <span className="text-xs px-2.5 py-1 rounded-full font-mono-ac uppercase" style={{ background: i.channel === "whatsapp" ? "var(--teal-soft)" : "var(--brass-soft)", color: i.channel === "whatsapp" ? "var(--teal)" : "var(--brass-text)" }}>
+                  {i.type === "custom" ? "custom" : i.type === "cart" ? "cart" : "catalog"}
+                </span>
+                <button
+                  onClick={function () {
+                    if (window.confirm("Delete this inquiry?")) props.onDelete(i.id);
+                  }}
+                  aria-label="Delete inquiry"
+                  className="text-xs cursor-pointer border-0 bg-transparent"
+                  style={{ color: "var(--danger)", textDecoration: "underline" }}
+                >
+                  Delete
+                </button>
+              </div>
             </div>
           </div>
         );
@@ -849,6 +900,41 @@ function AdminContent(props) {
       </p>
 
       <section>
+        <h3 className="font-display text-lg mb-2" style={{ color: "var(--ink)" }}>Seasonal look</h3>
+        <p className="text-sm mb-4" style={{ color: "var(--ink-dim)" }}>
+          Dress the site for the moment — Christmas, Ramadan, Eid and more. Each look only changes the colors; the layout, your catalog, and everything else stay exactly as they are. Switch back to Default at any time.
+        </p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {SITE_THEMES.map(function (t) {
+            var selected = (draft.theme || "default") === t.id;
+            return (
+              <button
+                key={t.id}
+                type="button"
+                onClick={function () { set("theme", t.id); }}
+                aria-pressed={selected}
+                className="text-left p-3 rounded-lg cursor-pointer border-0"
+                style={{
+                  background: selected ? "var(--brass-soft)" : "var(--panel)",
+                  border: selected ? "2px solid var(--brass)" : "1px solid var(--line)",
+                }}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <div className="font-display text-sm" style={{ color: "var(--ink)" }}>{t.label}</div>
+                  <div className="flex items-center gap-1 flex-shrink-0">
+                    {[t.canvas, t.accent, t.second].map(function (col, i) {
+                      return <span key={i} style={{ width: 14, height: 14, borderRadius: "50%", background: col, border: "1px solid var(--line)", display: "inline-block" }} />;
+                    })}
+                  </div>
+                </div>
+                <div className="text-xs mt-1" style={{ color: "var(--ink-dim)" }}>{t.desc}</div>
+              </button>
+            );
+          })}
+        </div>
+      </section>
+
+      <section>
         <h3 className="font-display text-lg mb-4" style={{ color: "var(--ink)" }}>Identity</h3>
         <div className="flex flex-col gap-4">
           <ContentField draft={draft} set={set} label="Business name" field="businessName" />
@@ -1180,6 +1266,9 @@ function AdminSettings(props) {
     props.updateSettings(function (prev) {
       var next = Object.assign({}, prev);
       next.security = Object.assign({}, prev.security || DEFAULT_SECURITY, { combo: comboBuilder });
+      // The stored combination is never echoed to the browser, so the
+      // server preserves it unless this flag marks an intentional change.
+      next.security._updateCombo = true;
       return next;
     }).then(function (ok) {
       // Only acknowledge once the server confirmed the write — a failed
@@ -1271,7 +1360,8 @@ function AdminSettings(props) {
     });
   }
   function testPing() {
-    apiPingDiscord("This is a test ping from your website.").then(function (ok) {
+    // Owner-only endpoint — requires this dashboard's admin session.
+    apiTestPingDiscord().then(function (ok) {
       setPingSent(ok);
       setTimeout(function () { setPingSent(false); }, 3000);
     });
@@ -1324,10 +1414,14 @@ function AdminSettings(props) {
         <div className="mb-6">
           <div className="text-sm mb-2" style={{ color: "var(--ink)" }}>Current combination</div>
           <div className="flex items-center gap-2 mb-3">
-            {security.combo.map(function (s, i) {
+            {/* The stored combination is verified server-side and is
+                never sent to any browser, so it can't be displayed
+                here — just its length. Save a new sequence below to
+                replace the hidden one. */}
+            {Array.from({ length: (security.comboLength) || 4 }).map(function (_, i) {
               return (
                 <span key={i} className="rounded-md flex items-center justify-center" style={{ width: 34, height: 34, background: "var(--panel)", border: "1px solid var(--line)" }}>
-                  <ShapeIcon shape={s} />
+                  <ShapeIcon shape="circle" size={0} />
                 </span>
               );
             })}
@@ -1484,7 +1578,7 @@ function AdminView(props) {
         })}
       </div>
 
-      {props.tab === "orders" && <AdminInquiries inquiries={props.inquiries} />}
+      {props.tab === "orders" && <AdminInquiries inquiries={props.inquiries} onDelete={props.deleteInquiry} onClear={props.clearInquiries} />}
       {props.tab === "catalog" && (
         <AdminCatalog categories={props.categories} models={props.models} addCategory={props.addCategory} renameCategory={props.renameCategory} deleteCategory={props.deleteCategory}
           addModel={props.addModel} updateModel={props.updateModel} deleteModel={props.deleteModel} toggleFeatured={props.toggleFeatured} importModels={props.importModels} content={content} settings={props.settings} />
