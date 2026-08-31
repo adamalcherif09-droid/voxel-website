@@ -1899,3 +1899,49 @@ html[data-theme='winter'] body::before {
   pointer-events: none;
   background: linear-gradient(90deg, #4a7ba6, #2d4a63, #4a7ba6);
 }
+
+/* =========================================================
+   Per-theme motif frame. Beyond the top ribbon and footer
+   glyph, each look floats a small column of its own themed
+   glyphs down the right edge of the viewport — a quiet,
+   unmistakable signature for every season/holiday. Glyphs are
+   written as CSS codepoint escapes so encoding can't garble
+   them; the column is fixed, pointer-transparent and sits
+   below the glass header so it never blocks anything.
+   Default has NO frame.
+   ========================================================= */
+
+body::after {
+  position: fixed;
+  top: 50%;
+  right: 18px;
+  transform: translateY(-50%);
+  z-index: 0;
+  padding: 0;
+  font-size: 26px;
+  line-height: 2.1;
+  text-align: center;
+  white-space: pre;
+  letter-spacing: 0;
+  opacity: 0.5;
+  pointer-events: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+html[data-theme='christmas'] body::after { content: "\2744\A\1F384\A\1F381\A\2B50"; }
+html[data-theme='newyear']     body::after { content: "\2728\A\1F386\A\1F552\A\2728"; }
+html[data-theme='valentine']   body::after { content: "\2764\A\1F496\A\1F48B\A\2764"; }
+html[data-theme='easter']      body::after { content: "\1F430\A\1F95A\A\1F338\A\1F407"; }
+html[data-theme='ramadan']     body::after { content: "\1F319\A\1F3EE\A\2728\A\1F319"; }
+html[data-theme='eid']         body::after { content: "\2728\A\1F31F\A\1F319\A\2728"; }
+html[data-theme='halloween']   body::after { content: "\1F383\A\1F47B\A\1F987\A\1F383"; }
+html[data-theme='mothersday']  body::after { content: "\1F338\A\1F49B\A\1F339\A\1F33C"; }
+html[data-theme='fathersday']  body::after { content: "\1F454\A\2615\A\1F9E7\A\1F489"; }
+html[data-theme='independenceday'] body::after { content: "\1F1F1\A\1F386\A\2B50\A\1F1E7"; }
+html[data-theme='graduation']  body::after { content: "\1F393\A\1F4DC\A\2728\A\1F3C5"; }
+html[data-theme='backtoschool'] body::after { content: "\270F\A\1F4DA\A\1F4D6\A\1F4C4"; }
+html[data-theme='spring']      body::after { content: "\1F338\A\1F98B\A\1F33F\A\1F331"; }
+html[data-theme='summer']      body::after { content: "\2600\A\1F3D6\A\1F334\A\1F30A"; }
+html[data-theme='autumn']      body::after { content: "\1F341\A\1F330\A\1F342\A\1F333"; }
+html[data-theme='winter']      body::after { content: "\2744\A\26C4\A\2744\A\2B1F"; }
