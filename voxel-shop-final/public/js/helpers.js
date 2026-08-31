@@ -108,6 +108,33 @@ function isKnownTheme(id) {
   return SITE_THEMES.some(function (t) { return t.id === id; });
 }
 
+// A short animated "Happy <holiday>" greeting shown once when the site
+// loads under a seasonal theme. Each theme has its own words and a set
+// of emojis that burst out of the greeting like fireworks. "default"
+// (the everyday look) shows nothing — this is a seasonal-only flourish.
+var THEME_GREETINGS = {
+  christmas:       { text: "Happy Christmas",       emojis: ["\u2744", "\u1F384", "\u1F381", "\u2603", "\u2B50"] },
+  newyear:         { text: "Happy New Year",        emojis: ["\u2728", "\u1F386", "\u1F942", "\u2B50", "\u1F38A"] },
+  valentine:       { text: "Happy Valentine's Day", emojis: ["\u2764", "\u1F496", "\u1F48B", "\u1F498", "\u1F49A"] },
+  easter:          { text: "Happy Easter",          emojis: ["\u1F430", "\u1F95A", "\u1F338", "\u1F407", "\u1F33B"] },
+  ramadan:         { text: "Happy Ramadan",         emojis: ["\u1F319", "\u1F3EE", "\u2B50", "\u1F54C", "\u1F383"] },
+  eid:             { text: "Happy Eid",             emojis: ["\u2728", "\u1F31F", "\u1F319", "\u2B50", "\u1F38F"] },
+  halloween:       { text: "Happy Halloween",       emojis: ["\u1F383", "\u1F47B", "\u1F987", "\u1F479", "\u1F312"] },
+  mothersday:      { text: "Happy Mother's Day",    emojis: ["\u1F338", "\u1F49B", "\u1F339", "\u1F33C", "\u1F497"] },
+  fathersday:      { text: "Happy Father's Day",    emojis: ["\u1F454", "\u2615", "\u1F9E7", "\u1F9D4", "\u1F512"] },
+  independenceday: { text: "Happy Independence Day", emojis: ["\u1F386", "\u2B50", "\u1F1F1", "\u1F1E7", "\u2728"] },
+  graduation:      { text: "Happy Graduation",      emojis: ["\u1F393", "\u1F4DC", "\u2728", "\u1F3C5", "\u1F389"] },
+  backtoschool:    { text: "Happy Back to School",  emojis: ["\u270F", "\u1F4DA", "\u1F4D6", "\u1F4C4", "\u1F3A0"] },
+  spring:          { text: "Happy Spring",          emojis: ["\u1F338", "\u1F98B", "\u1F33F", "\u1F331", "\u1F41B"] },
+  summer:          { text: "Happy Summer",          emojis: ["\u2600", "\u1F3D6", "\u1F334", "\u1F30A", "\u1F319"] },
+  autumn:          { text: "Happy Autumn",          emojis: ["\u1F341", "\u1F330", "\u1F342", "\u1F333", "\u1F984"] },
+  winter:          { text: "Happy Winter",          emojis: ["\u2744", "\u26C4", "\u2B1F", "\u1F328", "\u1F3BF"] },
+};
+function getThemeGreeting(themeId) {
+  if (!themeId || themeId === "default") return null;
+  return THEME_GREETINGS[themeId] || null;
+}
+
 // A model counts as NEW when it was added to the catalog within the
 // owner-configurable window (Content tab), one week by default — past
 // that, the tag stops showing so "New" always means genuinely fresh.

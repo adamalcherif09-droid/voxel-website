@@ -171,3 +171,111 @@ var ErrorBoundary = class extends React.Component {
     return this.props.children;
   }
 };
+
+/* The seasonal greeting: when the site loads under a themed look, a
+   fixed overlay animates the theme's "Happy <holiday>" into view letter
+   by letter, while a small cascade of the theme's own emojis bursts off
+   the word like fireworks. It then fades itself out (~3s) and unmounts,
+   so it never blocks the shop. The default look shows nothing.
+   Rendered lazily by app.js so it only exists while it has something to
+   say; onDone lets the parent drop the component once it's finished. */
+function ThemeGreeting(props) {
+  var theme = props.theme;
+  var onDone = props.onDone || function () {};
+  var g = getThemeGreeting(theme);
+  var _vis = React.useState(true); var visible = _vis[0]; var setVisible = _vis[1];
+  var _parts = React.useState([]); var parts = _parts[0]; var setParts = _parts[1];
+  var _gone = React.useState(false); var gone = _gone[0]; var setGone = _gone[1];
+  var spawnRef = React.useRef(null);
+  var cleanupRef = React.useRef(null);
+
+  React.useEffect(function () {
+    if (!g) return;
+
+    // Word letters reveal themselves via CSS (staggered animation); the
+    // firework below is the emoji cascade bursting off the word.
+    var start = Date.now();
+    var spawn = function () {
+      var emojis = g.emojis;
+      var next = [];
+      // 2-3 fresh particles per tick, each aimed at its own angle so the
+      // burst fans out full-circle around the greeting.
+      var n = 2 + Math.floor(Math.random() * 2);
+      for (var i = 0; i < n; i++) {
+        var angle = Math.random() * Math.PI * 2;
+        var dist = 60 + Math.random() * 150;
+        next.push({
+          id: start + "-" + parts.length + "-" + i + "-" + Math.random(),
+          emoji: emojis[Math.floor(Math.random() * emojis.length)],
+          dx: Math.round(Math.cos(angle) * dist),
+          dy: Math.round(Math.sin(angle) * dist),
+          rot: Math.round((Math.random() * 140 - 70)),
+          size: 18 + Math.round(Math.random() * 16),
+          lifespan: 1300 + Math.round(Math.random() * 500),
+        });
+      }
+      setParts(function (old) { return old.concat(next); });
+    };
+
+    spawnRef.current = setInterval(spawn, 90);
+    cleanupRef.current = setTimeout(function () {
+      clearInterval(spawnRef.current);
+      // Let the last burst finish, then fade the greeting out.
+      setTimeout(function () {
+        clearInterval(spawnRef.current);
+        setVisible(false);
+        setTimeout(function () {
+          setGone(true);
+          onDone();
+        }, 520);
+      }, 700);
+    }, 1700);
+    return function () {
+      if (spawnRef.current) clearInterval(spawnRef.current);
+      if (cleanupRef.current) clearTimeout(cleanupRef.current);
+    };
+  }, []);
+
+  if (!g || gone) return null;
+
+  // Split into words, then letters, so spaces are preserved and each
+  // letter animates in with its own tiny delay.
+  var words = g.text.split(" ");
+  var letterIdx = 0;
+  var letters = words.map(function (word, wi) {
+    var spans = word.split("").map(function (ch) {
+      return (
+        <span
+          key={"l" + letterIdx}
+          style={{ animationDelay: (0.08 + letterIdx * 0.055) + "s" }}
+        >{ch}</span>
+      );
+    });
+    return (
+      <span key={"w" + wi} style={{ whiteSpace: "pre" }}>{spans}{wi < words.length - 1 ? <span style={{ display: "inline-block", width: "0.32em" }}>&nbsp;</span> : null}</span>
+    );
+  });
+
+  return (
+    <div className={"voxel-greeting-overlay" + (visible ? "" : " voxel-greeting-exit")} role="presentation" aria-hidden="true">
+      <div className="voxel-greeting-inner">
+        <div className="voxel-greeting-word">{letters}</div>
+        {parts.map(function (p) {
+          return (
+            <span
+              key={p.id}
+              className="voxel-greeting-particle"
+              style={{
+                "--dx": p.dx + "px",
+                "--dy": p.dy + "px",
+                "--rot": p.rot + "deg",
+                fontSize: p.size + "px",
+                animationDuration: p.lifespan + "ms",
+              }}
+            >{p.emoji}</span>
+          );
+        })}
+      </div>
+    </div>
+  );
+}

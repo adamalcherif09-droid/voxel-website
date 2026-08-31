@@ -40,6 +40,7 @@ function App() {
   // working even where browsers block window.open popups like iOS).
   var _lastAdd = React.useState(null); var lastAdd = _lastAdd[0]; var setLastAdd = _lastAdd[1];
   var checkingOutRef = React.useRef(false);
+  var greetingShownForRef = React.useRef(null);
   React.useEffect(function () { saveCart(cart); }, [cart]);
   React.useEffect(function () {
     return function () { if (toastTimer.current) clearTimeout(toastTimer.current); };
@@ -463,6 +464,9 @@ function App() {
 
   return (
     <div className="voxel-root">
+      {getThemeGreeting(content.theme) && greetingShownForRef.current !== content.theme && (
+        <ThemeGreeting theme={content.theme} onDone={function () { greetingShownForRef.current = content.theme; }} />
+      )}
       <Header content={content} goHome={goHome} goCustom={goCustom} cartCount={cartItemCount(cart)} onCartOpen={function () { setCartOpen(true); }} />
       <main>
         {view === "home" && <HomeView content={content} categories={categories} models={models} goCategory={goCategory} goCustom={goCustom} onOrderModel={openCatalogOrder} onViewModel={setViewingModel} onAddToCart={openQuickAdd} />}
