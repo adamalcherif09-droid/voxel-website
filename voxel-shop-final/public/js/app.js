@@ -1,10 +1,5 @@
 function App() {
   var _loading = React.useState(true); var loading = _loading[0]; var setLoading = _loading[1];
-  // Flips true if the initial catalog/content load is still going after a
-  // few seconds — a cold-start Atlas read can be slow. We keep waiting,
-  // but surface a friendly "still waking up" note (with the storageGet
-  // timeout as the hard backstop) so the skeleton never looks frozen.
-  var _slowLoad = React.useState(false); var slowLoad = _slowLoad[0]; var setSlowLoad = _slowLoad[1];
   var _content = React.useState(DEFAULT_CONTENT); var content = _content[0]; var setContent = _content[1];
   var _catalog = React.useState({ categories: [], models: [] }); var catalog = _catalog[0]; var setCatalog = _catalog[1];
   var categories = catalog.categories;
@@ -51,13 +46,11 @@ function App() {
   }, []);
 
   React.useEffect(function () {
-    var slowTimer = setTimeout(function () { setSlowLoad(true); }, 7000);
     Promise.all([
       storageGet("voxel-catalog"),
       storageGet("voxel-settings"),
       storageGet("voxel-content"),
     ]).then(function (results) {
-      clearTimeout(slowTimer);
       var catalogResult = results[0];
       var settingsResult = results[1];
       var contentResult = results[2];
@@ -463,18 +456,7 @@ function App() {
   }
 
   if (loading) {
-    return (
-      <div className="voxel-root">
-        <SkeletonScreen />
-        {slowLoad && (
-          <div className="fixed inset-0 z-40 flex items-end justify-center bg-transparent pointer-events-none" style={{ pointerEvents: "none" }}>
-            <div className="mx-auto mb-16 px-5 py-3 rounded-lg text-center text-sm" style={{ background: "var(--cta-soft)", border: "1px solid var(--brass)", color: "var(--ink)" }}>
-              Still waking up — this can take a moment on a cold start.
-            </div>
-          </div>
-        )}
-      </div>
-    );
+    return <SkeletonScreen />;
   }
 
   var cartCheckoutUrl = cart.length > 0 ? buildWhatsAppUrl(content.whatsappNumber || content.contactPhone, buildCartMessage(cart, content.currencySymbol)) : null;
