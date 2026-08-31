@@ -1613,6 +1613,15 @@ async function start() {
 
   await seedMissingKeys();
 
+  // Warm the in-memory raw-doc cache for the keys visitors load first,
+  // so the very first request doesn't eat a cold Atlas read on top of
+  // the platform waking the instance. Seeds above already touched each
+  // key once; this is an explicit belt-and-braces pull to guarantee the
+  // cache is full before we start accepting requests.
+  for (const k of ["voxel-catalog", "voxel-settings", "voxel-content"]) {
+    try { await storageGet(k); } catch (e) { /* best-effort warm */ }
+  }
+
   // Warm the admin session cache from the persisted map so sessions
   // granted before a restart/redeploy keep working (see note above).
   await loadSessions();

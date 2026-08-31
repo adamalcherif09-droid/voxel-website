@@ -337,10 +337,19 @@ function apiGateCombo(combo) {
 // "unknown state", never as "empty" — that distinction is what stops a
 // transient outage from being able to wipe real data.
 function storageGet(key) {
-  return fetch("/api/storage/" + encodeURIComponent(key))
+  // Hard timeout so a slow/hung server (cold-start Atlas read, stalled
+  // network) resolves to "unknown state" instead of leaving the page
+  // frozen on its skeleton forever. Generous enough (35s) that a real
+  // slow-but-working cold read still gets a chance to finish; the app
+  // turns ok:false into a friendly retry screen, never a blank page.
+  var ctrl = (typeof AbortController !== "undefined") ? new AbortController() : null;
+  var timer = ctrl ? setTimeout(function () { ctrl.abort(); }, 35000) : null;
+  var done = function () { if (timer) { clearTimeout(timer); timer = null; } };
+  return fetch("/api/storage/" + encodeURIComponent(key), ctrl ? { signal: ctrl.signal } : undefined)
     .then(function (res) {
       if (!res.ok) return { ok: false, value: null };
       return res.json().then(function (data) {
+        done();
         try {
           return { ok: true, value: data && data.value ? JSON.parse(data.value) : null };
         } catch (e) {
@@ -348,7 +357,7 @@ function storageGet(key) {
         }
       });
     })
-    .catch(function () { return { ok: false, value: null }; });
+    .catch(function () { done(); return { ok: false, value: null }; });
 }
 
 // Returns { ok: true } when the server confirmed the write, otherwise
