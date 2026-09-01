@@ -1959,9 +1959,10 @@ html[data-theme='winter'] body::before {
   animation-fill-mode: forwards;
 }
 @keyframes voxel-burst {
-  0%   { opacity: 0; transform: translate(-50%, -50%) scale(0.4) rotate(0deg); }
-  14%  { opacity: 1; transform: translate(-50%, -50%) scale(1) rotate(var(--rot, 0deg)); }
-  100% { opacity: 0; transform: translate(calc(-50% + var(--dx, 0px)), calc(-50% + var(--dy, 0px))) scale(1.2) rotate(var(--rot, 0deg)); }
+  0%   { opacity: 0; transform: translate(-50%, -50%) scale(0.3) rotate(0deg); }
+  10%  { opacity: 1; transform: translate(-50%, -50%) scale(1) rotate(var(--rot, 0deg)); }
+  45%  { opacity: 1; transform: translate(calc(-50% + var(--mx, 0px)), calc(-50% + var(--my, 0px))) scale(1) rotate(var(--rot, 0deg)); }
+  100% { opacity: 0; transform: translate(calc(-50% + var(--dx, 0px)), calc(-50% + var(--dy, 0px))) scale(0.9) rotate(var(--rot, 0deg)); }
 }
 @media (prefers-reduced-motion: reduce) {
   .voxel-greeting-overlay { display: none; }

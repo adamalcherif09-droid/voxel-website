@@ -199,19 +199,27 @@ function ThemeGreeting(props) {
       var emojis = g.emojis;
       var next = [];
       // 2-3 fresh particles per tick, each aimed at its own angle so the
-      // burst fans out full-circle around the greeting.
+      // burst fans out full-circle around the greeting. Each one pops out,
+      // arcs (curves) through a midpoint, then falls away — like a firework.
       var n = 2 + Math.floor(Math.random() * 2);
       for (var i = 0; i < n; i++) {
         var angle = Math.random() * Math.PI * 2;
-        var dist = 60 + Math.random() * 150;
+        var dist = 80 + Math.random() * 200;
+        var dx = Math.cos(angle) * dist;
+        var dy = Math.sin(angle) * dist;
+        // Arc midpoint bows up over the straight line so the emoji curves
+        // outward instead of gliding in a straight line (firework gravity).
+        var arcH = 30 + Math.random() * 70;
         next.push({
           id: start + "-" + parts.length + "-" + i + "-" + Math.random(),
           emoji: emojis[Math.floor(Math.random() * emojis.length)],
-          dx: Math.round(Math.cos(angle) * dist),
-          dy: Math.round(Math.sin(angle) * dist),
-          rot: Math.round((Math.random() * 140 - 70)),
-          size: 18 + Math.round(Math.random() * 16),
-          lifespan: 1300 + Math.round(Math.random() * 500),
+          dx: Math.round(dx),
+          dy: Math.round(dy),
+          mx: Math.round(dx * 0.5),
+          my: Math.round(dy * 0.5 - arcH),
+          rot: Math.round((Math.random() * 180 - 90)),
+          size: 16 + Math.round(Math.random() * 18),
+          lifespan: 800 + Math.round(Math.random() * 350),
         });
       }
       setParts(function (old) { return old.concat(next); });
@@ -268,6 +276,8 @@ function ThemeGreeting(props) {
               style={{
                 "--dx": p.dx + "px",
                 "--dy": p.dy + "px",
+                "--mx": p.mx + "px",
+                "--my": p.my + "px",
                 "--rot": p.rot + "deg",
                 fontSize: p.size + "px",
                 animationDuration: p.lifespan + "ms",
