@@ -385,7 +385,7 @@
         revealObserver.unobserve(entry.target);
       }
     });
-  }, { threshold: 0.12, rootMargin: "0px 0px -40px 0px" });
+  }, { threshold: 0, rootMargin: "0px 0px 160px 0px" });
 
   var currentHeroEl = null;
 
@@ -401,7 +401,9 @@
 
   function scanForReveals(root) {
     if (!root || !root.querySelectorAll) return;
-    root.querySelectorAll(".voxel-masonry-item").forEach(function (el, i) { markForReveal(el, i); });
+    // Model cards stay fully visible while you scroll — hiding them until
+    // they intersect makes the masonry look empty/ended at the bottom.
+    // Only section headers and category tiles get the scroll-triggered reveal.
     root.querySelectorAll(".grid.grid-cols-2 > *").forEach(function (el, i) { markForReveal(el, i); });
   }
 
