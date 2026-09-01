@@ -41,6 +41,14 @@ function App() {
   var _lastAdd = React.useState(null); var lastAdd = _lastAdd[0]; var setLastAdd = _lastAdd[1];
   var checkingOutRef = React.useRef(false);
   var greetingShownForRef = React.useRef(null);
+  var _firstScrolled = React.useState(false); var firstScrolled = _firstScrolled[0]; var setFirstScrolled = _firstScrolled[1];
+  React.useEffect(function () {
+    function onScroll() {
+      if (window.pageYOffset > 8) setFirstScrolled(true);
+    }
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return function () { window.removeEventListener("scroll", onScroll); };
+  }, []);
   React.useEffect(function () { saveCart(cart); }, [cart]);
   React.useEffect(function () {
     return function () { if (toastTimer.current) clearTimeout(toastTimer.current); };
@@ -464,7 +472,7 @@ function App() {
 
   return (
     <div className="voxel-root">
-      {getThemeGreeting(content.theme) && greetingShownForRef.current !== content.theme && (
+      {firstScrolled && getThemeGreeting(content.theme) && greetingShownForRef.current !== content.theme && (
         <ThemeGreeting theme={content.theme} onDone={function () { greetingShownForRef.current = content.theme; }} />
       )}
       <Header content={content} goHome={goHome} goCustom={goCustom} cartCount={cartItemCount(cart)} onCartOpen={function () { setCartOpen(true); }} />
