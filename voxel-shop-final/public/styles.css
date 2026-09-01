@@ -1957,16 +1957,36 @@ html[data-theme='winter'] body::before {
   pointer-events: none;
   white-space: nowrap;
   animation-name: voxel-burst;
-  animation-timing-function: cubic-bezier(0.16, 0.84, 0.34, 1);
+  animation-timing-function: cubic-bezier(0.08, 0.75, 0.2, 1);
   animation-fill-mode: forwards;
 }
 @keyframes voxel-burst {
-  /* Emojis start invisible and only fade in AFTER they've shot off the
-     center, so you never see them sitting in the middle waiting to move:
-     they pop, arc outward behind the word, and fade out. */
-  0%   { opacity: 0; transform: translate(-50%, -50%) scale(0.35) rotate(0deg); }
-  50%  { opacity: 1; transform: translate(calc(-50% + var(--mx, 0px)), calc(-50% + var(--my, 0px))) scale(1.05) rotate(var(--rot, 0deg)); }
-  100% { opacity: 0; transform: translate(calc(-50% + var(--dx, 0px)), calc(-50% + var(--dy, 0px))) scale(0.85) rotate(var(--rot, 0deg)); }
+  /* Firework pop: flashes visibly only once it has blasted off the center,
+     slams most of the way out fast, arcs over under gravity, then dies. */
+  0%   { opacity: 0; transform: translate(-50%, -50%) scale(0.2) rotate(0deg); }
+  12%  { opacity: 1; transform: translate(calc(-50% + var(--fx, 0px)), calc(-50% + var(--fy, 0px))) scale(1.15) rotate(var(--rot, 0deg)); }
+  55%  { opacity: 1; transform: translate(calc(-50% + var(--mx, 0px)), calc(-50% + var(--my, 0px))) scale(1) rotate(var(--rot, 0deg)); }
+  100% { opacity: 0; transform: translate(calc(-50% + var(--dx, 0px)), calc(-50% + var(--dy, 0px))) scale(0.8) rotate(var(--rot, 0deg)); }
+}
+
+.voxel-greeting-flash {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 18px;
+  height: 18px;
+  margin-left: -9px;
+  margin-top: -9px;
+  border-radius: 50%;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0;
+  background: radial-gradient(circle, color-mix(in srgb, var(--brass) 88%, white) 0%, color-mix(in srgb, var(--brass) 55%, transparent) 45%, transparent 72%);
+  animation: voxel-flash 0.3s ease-out forwards;
+}
+@keyframes voxel-flash {
+  0%   { opacity: 0.95; transform: scale(0.6); }
+  100% { opacity: 0; transform: scale(4.5); }
 }
 @media (prefers-reduced-motion: reduce) {
   .voxel-greeting-overlay { display: none; }

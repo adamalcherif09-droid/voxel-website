@@ -186,61 +186,65 @@ function ThemeGreeting(props) {
   var _vis = React.useState(true); var visible = _vis[0]; var setVisible = _vis[1];
   var _parts = React.useState([]); var parts = _parts[0]; var setParts = _parts[1];
   var _gone = React.useState(false); var gone = _gone[0]; var setGone = _gone[1];
-  var spawnRef = React.useRef(null);
-  var cleanupRef = React.useRef(null);
+  var _flashKey = React.useState(0); var flashKey = _flashKey[0]; var setFlashKey = _flashKey[1];
 
   React.useEffect(function () {
     if (!g) return;
 
-    // Word letters reveal themselves via CSS (staggered animation); the
-    // firework below is the emoji cascade bursting off the word.
+    // A real firework "pop": one simultaneous full-circle burst (not a
+    // trickle) with a bright flash at the center, sparks that shoot out
+    // fast, arc under gravity, and die. Two breaks fire so it feels like
+    // a classic double-burst shell.
     var start = Date.now();
-    var spawn = function () {
+    var pid = 0;
+    var pop = function (count, spread, durScale) {
       var emojis = g.emojis;
       var next = [];
-      // 2-3 fresh particles per tick, each aimed at its own angle so the
-      // burst fans out full-circle around the greeting. Each one pops out,
-      // arcs (curves) through a midpoint, then falls away — like a firework.
-      var n = 2 + Math.floor(Math.random() * 2);
-      for (var i = 0; i < n; i++) {
-        var angle = Math.random() * Math.PI * 2;
-        var dist = 80 + Math.random() * 200;
+      for (var i = 0; i < count; i++) {
+        // Evenly spaced around the full circle, with jitter + varied radius
+        // so the burst fills a ring/sphere like real sparks.
+        var angle = (i / count) * Math.PI * 2 + (Math.random() - 0.5) * 0.4;
+        var dist = spread * (0.6 + Math.random() * 0.7);
         var dx = Math.cos(angle) * dist;
         var dy = Math.sin(angle) * dist;
-        // Arc midpoint bows up over the straight line so the emoji curves
-        // outward instead of gliding in a straight line (firework gravity).
-        var arcH = 30 + Math.random() * 70;
+        // Gravity arc: bows up over the straight line so sparks curve down.
+        var arcH = 24 + Math.random() * 55;
         next.push({
-          id: start + "-" + parts.length + "-" + i + "-" + Math.random(),
+          id: start + "-" + (pid++) + "-" + Math.random(),
           emoji: emojis[Math.floor(Math.random() * emojis.length)],
           dx: Math.round(dx),
           dy: Math.round(dy),
+          fx: Math.round(dx * 0.3),
+          fy: Math.round(dy * 0.3),
           mx: Math.round(dx * 0.5),
           my: Math.round(dy * 0.5 - arcH),
-          rot: Math.round((Math.random() * 180 - 90)),
-          size: 16 + Math.round(Math.random() * 18),
-          lifespan: 800 + Math.round(Math.random() * 350),
+          rot: Math.round((Math.random() * 200 - 100)),
+          size: 16 + Math.round(Math.random() * 16),
+          lifespan: Math.round((550 + Math.random() * 300) * durScale),
         });
       }
       setParts(function (old) { return old.concat(next); });
+      setFlashKey(function (k) { return (k || 0) + 1; });
     };
 
-    spawnRef.current = setInterval(spawn, 90);
-    cleanupRef.current = setTimeout(function () {
-      clearInterval(spawnRef.current);
-      // Let the last burst finish, then fade the greeting out.
+    // First (main) pop as the word starts revealing, then a second, smaller
+    // break as it finishes — a double-burst firework.
+    var t1 = setTimeout(function () { pop(20, 190, 1); }, 260);
+    var t2 = setTimeout(function () { pop(14, 165, 0.85); }, 1250);
+
+    // Let the last sparks die, then fade the greeting out.
+    var tExit = setTimeout(function () {
+      setVisible(false);
       setTimeout(function () {
-        clearInterval(spawnRef.current);
-        setVisible(false);
-        setTimeout(function () {
-          setGone(true);
-          onDone();
-        }, 520);
-      }, 700);
-    }, 1700);
+        setGone(true);
+        onDone();
+      }, 520);
+    }, 2050);
+
     return function () {
-      if (spawnRef.current) clearInterval(spawnRef.current);
-      if (cleanupRef.current) clearTimeout(cleanupRef.current);
+      clearTimeout(t1);
+      clearTimeout(t2);
+      clearTimeout(tExit);
     };
   }, []);
 
@@ -267,6 +271,7 @@ function ThemeGreeting(props) {
   return (
     <div className={"voxel-greeting-overlay" + (visible ? "" : " voxel-greeting-exit")} role="presentation" aria-hidden="true">
       <div className="voxel-greeting-inner">
+        {flashKey > 0 && <span key={flashKey} className="voxel-greeting-flash" />}
         {parts.map(function (p) {
           return (
             <span
@@ -275,6 +280,8 @@ function ThemeGreeting(props) {
               style={{
                 "--dx": p.dx + "px",
                 "--dy": p.dy + "px",
+                "--fx": p.fx + "px",
+                "--fy": p.fy + "px",
                 "--mx": p.mx + "px",
                 "--my": p.my + "px",
                 "--rot": p.rot + "deg",
