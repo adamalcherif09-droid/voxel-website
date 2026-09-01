@@ -16,7 +16,7 @@ function Header(props) {
           <button
             onClick={props.onCartOpen}
             aria-label={"Open cart" + (cartCount ? " (" + cartCount + " item" + (cartCount === 1 ? "" : "s") + ")" : "")}
-            className="glass-accent voxel-tilt flex items-center justify-center px-3 py-2 rounded-md border-0 cursor-pointer relative"
+            className="glass-accent flex items-center justify-center px-3 py-2 rounded-md border-0 cursor-pointer relative"
             style={{ color: "var(--teal)" }}
           >
             <ShoppingBag size={18} />
@@ -34,7 +34,7 @@ function Header(props) {
               </span>
             )}
           </button>
-          <button onClick={props.goCustom} className="glass-accent tint-brass voxel-magnetic voxel-tilt flex items-center gap-1.5 px-3.5 py-2 rounded-md border-0 cursor-pointer text-sm font-medium" style={{ color: "#161618" }}>
+          <button onClick={props.goCustom} className="glass-accent tint-brass voxel-magnetic flex items-center gap-1.5 px-3.5 py-2 rounded-md border-0 cursor-pointer text-sm font-medium" style={{ color: "#161618" }}>
             <UploadCloud size={16} />
             <span className="hidden sm:inline">Custom print</span>
           </button>
@@ -145,7 +145,7 @@ function ShareButton(props) {
         onClick={function (e) { e.stopPropagation(); share(); }}
         aria-label={copied ? "Link copied" : "Share this design"}
         title={copied ? "Link copied!" : "Share"}
-        className="liquid-glass voxel-tilt cursor-pointer border-0 rounded-md flex items-center justify-center flex-shrink-0"
+        className="liquid-glass cursor-pointer border-0 rounded-md flex items-center justify-center flex-shrink-0"
         style={{ width: 34, height: 34, color: "var(--brass-text)" }}
       >
         {copied ? <LinkIcon size={14} /> : <ShareIcon size={14} />}
@@ -166,7 +166,7 @@ function ModelCard(props) {
   return (
     <div
       onClick={props.onView}
-      className={"voxel-tilt rounded-lg overflow-hidden flex flex-col cursor-pointer"}
+      className={"voxel-card rounded-lg overflow-hidden flex flex-col cursor-pointer"}
       style={{ background: "var(--panel)", border: props.highlight ? "1px solid var(--brass)" : "1px solid var(--line)" }}
     >
       <div className="flex items-center justify-center" style={{ background: "var(--panel-2)", minHeight: model.image ? undefined : 140, position: "relative" }}>
@@ -180,7 +180,7 @@ function ModelCard(props) {
           onClick={function (e) { e.stopPropagation(); props.onAddToCart(); }}
           aria-label={"Add " + model.name + " to cart"}
           title="Add to cart"
-          className="voxel-tilt cursor-pointer border-0"
+          className="cursor-pointer border-0"
           style={{
             position: "absolute", top: 10, right: 10, width: 34, height: 34, borderRadius: 17,
             background: "rgba(22,22,24,0.65)", color: "#f2ece5",
@@ -203,7 +203,7 @@ function ModelCard(props) {
             <ShareButton model={model} compact />
             <button
               onClick={function (e) { e.stopPropagation(); props.onOrder(); }}
-              className="liquid-glass tint-teal voxel-tilt text-xs sm:text-sm font-medium px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-md cursor-pointer border-0"
+              className="liquid-glass tint-teal text-xs sm:text-sm font-medium px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-md cursor-pointer border-0"
               style={{ color: "var(--canvas)" }}
             >
               Order now
@@ -517,7 +517,7 @@ function ModelDetailPopup(props) {
           </div>
           <button
             onClick={props.onClose}
-            className="liquid-glass liquid-glass--round voxel-tilt cursor-pointer border-0"
+            className="liquid-glass liquid-glass--round cursor-pointer border-0"
             aria-label="Close"
             style={{ position: "absolute", top: 12, right: 12, width: 32, height: 32, background: "rgba(22,22,24,0.35)", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center" }}
           >
@@ -637,7 +637,7 @@ function OrderContactPopup(props) {
                 target="_blank"
                 rel="noopener noreferrer"
                 onClick={handleWhatsAppClick}
-                className="liquid-glass tint-brass voxel-tilt inline-flex items-center justify-center gap-2 px-5 py-3 rounded-md text-sm font-medium w-full"
+                className="liquid-glass tint-brass inline-flex items-center justify-center gap-2 px-5 py-3 rounded-md text-sm font-medium w-full"
                 style={{ color: "#161618", textDecoration: "none" }}
               >
                 <MessageCircle size={16} />
@@ -907,7 +907,7 @@ function CartDrawer(props) {
                 target="_blank"
                 rel="noopener noreferrer"
                 onClick={props.onCheckout}
-                className="liquid-glass liquid-glass--tint-brass voxel-magnetic voxel-tilt w-full flex items-center justify-center gap-2 cursor-pointer"
+                className="liquid-glass liquid-glass--tint-brass voxel-magnetic w-full flex items-center justify-center gap-2 cursor-pointer"
                 style={{ padding: "12px 18px", borderRadius: 12, color: "var(--ink)", textDecoration: "none" }}
               >
                 <MessageCircle size={18} />

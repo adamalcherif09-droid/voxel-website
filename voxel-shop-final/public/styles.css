@@ -348,16 +348,13 @@ h1.voxel-reveal {
   transform: translateY(0) scale(1);
 }
 
-/* Card hover — 3D tilt driven by JS (pointer position), CSS just
-   supplies the perspective/transition base and the image zoom. */
-.voxel-tilt, .cat-tile-accent {
-  transform-style: preserve-3d;
-  transition: transform 0.15s cubic-bezier(0.2,0.8,0.2,1), box-shadow 0.35s ease;
-  will-change: transform;
+/* Card hover — plain shadow lift + image zoom. */
+.voxel-card, .cat-tile-accent {
+  transition: box-shadow 0.35s ease;
 }
 /* Hover decoration lives inside @media (hover: hover) at the bottom of
    this file — on touch screens :hover sticks after a tap. */
-.voxel-tilt img {
+.voxel-card img {
   transition: transform 0.5s cubic-bezier(.2,.7,.2,1);
 }
 
@@ -573,10 +570,9 @@ footer.liquid-glass {
 .cat-shelf {
   padding: 14px;
   border-radius: 18px;
-  /* Overrides the shared overflow:hidden — tiles inside tilt on hover
-     and would get clipped at the shelf's edge otherwise. Modern
-     browsers already clip backdrop-filter to border-radius on their
-     own, so this loses no visual rounding. */
+  /* Overrides the shared overflow:hidden so hover-shadowed tiles don't
+     get clipped at the shelf's edge; backdrop-filter is still clipped
+     to border-radius by the browser itself. */
   overflow: visible;
 }
 .cat-tile-accent { border-radius: 12px; }
@@ -612,44 +608,6 @@ footer.liquid-glass {
 @keyframes voxelBarIn {
   from { transform: translateY(10px) scaleX(0.5); }
   to   { transform: translateY(0) scaleX(1); }
-}
-
-/* Device-tilt (gyroscope) cards — mobile equivalent of the desktop
-   cursor tilt. --gyro-x/--gyro-y are updated once per frame by
-   motion.js and drive every card at once. Only elements motion.js has
-   tagged .voxel-gyro-target respond (large cards/tiles); small buttons
-   stay flat so they don't warp while the phone is being held. */
-.voxel-gyro-active .voxel-gyro-target {
-  transform: perspective(500px) rotateX(var(--gyro-x, 0deg)) rotateY(var(--gyro-y, 0deg));
-  transition: transform 0.1s ease-out;
-}
-
-.voxel-tilt-permission {
-  /* Deliberately quiet: a small ghost pill tucked in the bottom-right
-     corner, styled like the rest of the glass language. It offers the
-     gyroscope feature without shouting for attention. */
-  position: fixed;
-  right: 14px;
-  bottom: 14px;
-  bottom: calc(14px + env(safe-area-inset-bottom, 0px));
-  z-index: 30;
-  padding: 8px 14px;
-  border-radius: 999px;
-  border: 1px solid rgba(22,22,24,0.14);
-  cursor: pointer;
-  font-size: 12px;
-  font-family: 'Inter', sans-serif;
-  font-weight: 500;
-  color: var(--ink-dim);
-  background: rgba(230,219,211,0.88);
-  -webkit-backdrop-filter: blur(6px);
-  backdrop-filter: blur(6px);
-  box-shadow: 0 4px 14px rgba(22,22,24,0.10);
-  animation: voxelPermissionIn 0.45s cubic-bezier(.2,.7,.2,1) both;
-}
-@keyframes voxelPermissionIn {
-  from { opacity: 0; transform: translateY(12px); }
-  to { opacity: 1; transform: translateY(0); }
 }
 
 /* ============ STAGE 3 — MOTION GRAPHICS ============ */
@@ -988,10 +946,10 @@ button, a {
    a tile stays lifted forever after being tapped). All hover-only
    decoration is therefore desktop/trackpad-only. */
 @media (hover: hover) {
-  .voxel-tilt:hover, .cat-tile-accent:hover {
+  .voxel-card:hover, .cat-tile-accent:hover {
     box-shadow: 0 14px 30px rgba(22,22,24,0.14);
   }
-  .voxel-tilt:hover img {
+  .voxel-card:hover img {
     transform: scale(1.06);
   }
   button.liquid-glass:hover {
@@ -1024,8 +982,8 @@ button, a {
   .voxel-observe { opacity: 1 !important; transform: none !important; transition: none !important; }
   .voxel-masonry-item > div, .voxel-masonry-item img { transition: none !important; }
   .voxel-masonry-item > div:hover, .voxel-masonry-item > div:hover img { transform: none !important; }
-  .voxel-tilt, .cat-tile-accent { transition: none !important; transform: none !important; }
-  .voxel-tilt:hover, .cat-tile-accent:hover { transform: none !important; }
+  .voxel-card, .cat-tile-accent { transition: none !important; }
+  .voxel-card:hover, .cat-tile-accent:hover { transform: none !important; }
   .voxel-parallax { transform: none !important; }
   .voxel-img-blur { filter: none !important; transform: none !important; opacity: 1 !important; transition: none !important; }
   button { transition: none !important; }
@@ -1033,8 +991,6 @@ button, a {
   .voxel-modal-overlay, .voxel-modal-overlay > div { animation: none !important; }
   .voxel-page-fade, .voxel-page-push, .voxel-page-pop { animation: none !important; opacity: 1 !important; transform: none !important; }
   .voxel-success-flash { animation: none !important; }
-  .voxel-gyro-active .voxel-gyro-target { transform: none !important; transition: none !important; }
-  .voxel-tilt-permission { animation: none !important; }
 
   .voxel-mark-bar { animation: none !important; transform: none !important; }
   .liquid-glass, .glass-accent { transition: none !important; }

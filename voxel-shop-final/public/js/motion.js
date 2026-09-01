@@ -48,10 +48,10 @@
     }, { passive: true });
   }
 
-  /* Cursor-only effects (3D tilt, magnetic pull) don't belong on touch —
+  /* Cursor-only effects (magnetic pull) don't belong on touch —
      touch fires the same pointermove events during a normal scroll drag,
-     which would make cards visibly wobble as a finger passes over them
-     and can leave them stuck mid-tilt after the scroll ends. Gate both
+     which would make buttons visibly wobble as a finger passes over them
+     and can leave them stuck half-shifted after the scroll ends. Gate it
      behind an actual hover-capable pointer (mouse/trackpad). */
   var hasFinePointer = window.matchMedia && window.matchMedia("(hover: hover) and (pointer: fine)").matches;
 
@@ -180,139 +180,6 @@
     }
   }
 
-  /* ---------- Device-tilt cards (mobile gyroscope) ----------
-     Mobile equivalent of the desktop cursor-tilt: physically tilting
-     the phone rotates the cards instead of the cursor doing it.
-     A shared CSS custom property (updated once per frame) drives every
-     card at once, rather than looping through them all on each sensor
-     reading. Calibrates against whatever angle the phone is first held
-     at, so it reacts to *changes* in tilt rather than an absolute angle
-     that assumes the phone starts out perfectly flat. */
-  var retagGyroTargets = null;
-  var retagTiltPill = null;
-
-  function initDeviceTilt() {
-    if (hasFinePointer) return; // desktop already gets cursor tilt
-    if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-    if (!window.DeviceOrientationEvent) return;
-
-    var baseline = null;
-    var target = { x: 0, y: 0 };
-    var current = { x: 0, y: 0 };
-    /* Tuned for real phones: punchy and immediately noticeable — a
-       small wrist turn (~16 degrees from rest) now swings cards the
-       full angle. Still hard-capped and smoothed so hand tremor reads
-       as gentle motion, never the wild swinging of the first version. */
-    var MAX_TILT = 16;
-    var SENSITIVITY = 1.0;
-    var LERP = 0.14;
-    var looping = false;
-    var retagPending = false;
-
-    /* Only elements physically large enough to read as cards rotate
-       with the phone — at small-button size (Order now, modal close,
-       header CTA, WhatsApp link) even a gentle 3D warp looks wrong,
-       so those keep their flat look. Re-runs whenever React swaps
-       views, since cards render dynamically. */
-    function tagGyroTargets() {
-      if (retagPending) return;
-      retagPending = true;
-      requestAnimationFrame(function () {
-        retagPending = false;
-        document.querySelectorAll(".voxel-tilt, .cat-tile-accent").forEach(function (el) {
-          var rect = el.getBoundingClientRect();
-          if (rect.width >= 110 && rect.height >= 90) el.classList.add("voxel-gyro-target");
-          else el.classList.remove("voxel-gyro-target");
-        });
-      });
-    }
-
-    function loop() {
-      current.x += (target.x - current.x) * LERP;
-      current.y += (target.y - current.y) * LERP;
-      document.documentElement.style.setProperty("--gyro-x", current.x.toFixed(2) + "deg");
-      document.documentElement.style.setProperty("--gyro-y", current.y.toFixed(2) + "deg");
-      requestAnimationFrame(loop);
-    }
-
-    function onOrientation(e) {
-      if (e.beta === null || e.gamma === null) return;
-      if (!baseline) baseline = { beta: e.beta, gamma: e.gamma };
-      var dBeta = e.beta - baseline.beta;
-      var dGamma = e.gamma - baseline.gamma;
-      target.x = Math.max(-MAX_TILT, Math.min(MAX_TILT, -dBeta * SENSITIVITY));
-      target.y = Math.max(-MAX_TILT, Math.min(MAX_TILT, dGamma * SENSITIVITY));
-      if (!looping) { looping = true; loop(); }
-    }
-
-    function start() {
-      window.addEventListener("deviceorientation", onOrientation);
-      document.documentElement.classList.add("voxel-gyro-active");
-      tagGyroTargets();
-      retagGyroTargets = tagGyroTargets;
-    }
-
-    var needsPermission = typeof DeviceOrientationEvent !== "undefined" &&
-      typeof DeviceOrientationEvent.requestPermission === "function";
-
-    if (!needsPermission) {
-      start();
-      return;
-    }
-
-    // iOS 13+ only allows this to be requested from a direct tap, so a
-    // small pill offers it. The pill politely hides itself after a
-    // while BUT comes back on every view change until the user either
-    // enables tilt or explicitly denies it (both remembered for the
-    // session) — it used to vanish forever after 12 seconds, which on
-    // anything slower than a fast first visit made the feature
-    // impossible to ever turn on.
-    var tiltPref = "";
-    try { tiltPref = window.sessionStorage.getItem("voxel-tilt") || ""; } catch (e) { tiltPref = ""; }
-
-    var autoHide = null; // pill auto-hide timer (must be declared — strict mode)
-
-    retagTiltPill = function () {
-      try {
-        // Home page only: the pill belongs to the shop's front door, not
-        // to category/admin views. Leaving home dismisses it; coming
-        // back offers it again (until enabled or denied for the session).
-        if (!document.querySelector(".cat-shelf")) {
-          var stale = document.querySelector(".voxel-tilt-permission");
-          if (stale) { clearTimeout(autoHide); stale.remove(); }
-          return;
-        }
-        if (tiltPref) return;
-        if (document.querySelector(".voxel-tilt-permission")) return;
-        var btn = document.createElement("button");
-        btn.type = "button";
-        btn.className = "voxel-tilt-permission";
-        btn.setAttribute("aria-label", "Enable tilt effect");
-        btn.textContent = "Enable tilt effect";
-        autoHide = setTimeout(function () { btn.remove(); }, 12000);
-        btn.addEventListener("click", function () {
-          clearTimeout(autoHide);
-          DeviceOrientationEvent.requestPermission().then(function (state) {
-            if (state === "granted") {
-              tiltPref = "granted";
-              try { window.sessionStorage.setItem("voxel-tilt", "granted"); } catch (e) {}
-              start();
-            } else {
-              tiltPref = "denied";
-              try { window.sessionStorage.setItem("voxel-tilt", "denied"); } catch (e) {}
-            }
-            btn.remove();
-          }).catch(function () { btn.remove(); });
-        });
-        document.body.appendChild(btn);
-      } catch (e) {
-        // Never let a pill problem break the rest of the motion system.
-        console && console.warn && console.warn("tilt pill skipped:", e);
-      }
-    };
-    retagTiltPill();
-  }
-
   var boundHeader = null;
 
   function initHeaderGlass() {
@@ -405,28 +272,6 @@
     // they intersect makes the masonry look empty/ended at the bottom.
     // Only section headers and category tiles get the scroll-triggered reveal.
     root.querySelectorAll(".grid.grid-cols-2 > *").forEach(function (el, i) { markForReveal(el, i); });
-  }
-
-  /* ---------- 3D tilt cards ---------- */
-  function initTiltCards() {
-    if (!hasFinePointer) return;
-    var TILT_SELECTOR = ".voxel-tilt, .cat-tile-accent";
-    document.addEventListener("pointermove", function (e) {
-      var card = e.target.closest && e.target.closest(TILT_SELECTOR);
-      if (!card) return;
-      var rect = card.getBoundingClientRect();
-      var px = (e.clientX - rect.left) / rect.width;
-      var py = (e.clientY - rect.top) / rect.height;
-      var rotateY = (px - 0.5) * 40;
-      var rotateX = (0.5 - py) * 40;
-      card.style.transform = "perspective(500px) rotateX(" + rotateX.toFixed(2) + "deg) rotateY(" + rotateY.toFixed(2) + "deg) translateY(-6px)";
-    }, { passive: true });
-    document.addEventListener("pointerout", function (e) {
-      var card = e.target.closest && e.target.closest(TILT_SELECTOR);
-      if (card && (!e.relatedTarget || !card.contains(e.relatedTarget))) {
-        card.style.transform = "";
-      }
-    });
   }
 
   /* ---------- Hero parallax ---------- */
@@ -846,9 +691,6 @@
     scanEyebrows(node);
     scanCountups(node);
     scanScrollFilm(node);
-    // Every view change is another chance to offer the iOS tilt
-    // permission pill, until it's used or dismissed for the session.
-    if (retagTiltPill) retagTiltPill();
     // The owner dashboard is a work area, not a storefront — no film
     // behind the forms. Toggled on every view change so it comes back
     // the moment they leave the dashboard.
@@ -951,7 +793,6 @@
           initImageBlurUp(node);
           initMagneticButtons();
           scanMotionGraphics(node);
-          if (retagGyroTargets) retagGyroTargets();
 
           if (node.parentElement && node.parentElement.tagName === "MAIN") {
             var hasBack = node.querySelectorAll
@@ -970,8 +811,6 @@
   function init() {
     injectDistortionFilter();
     initSpecularTracking();
-    initTiltCards();
-    initDeviceTilt();
     initHeroParallax();
     initTapBloom();
     initStarPop();
