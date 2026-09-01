@@ -267,7 +267,6 @@ function ThemeGreeting(props) {
   return (
     <div className={"voxel-greeting-overlay" + (visible ? "" : " voxel-greeting-exit")} role="presentation" aria-hidden="true">
       <div className="voxel-greeting-inner">
-        <div className="voxel-greeting-word">{letters}</div>
         {parts.map(function (p) {
           return (
             <span
@@ -285,6 +284,7 @@ function ThemeGreeting(props) {
             >{p.emoji}</span>
           );
         })}
+        <div className="voxel-greeting-word">{letters}</div>
       </div>
     </div>
   );

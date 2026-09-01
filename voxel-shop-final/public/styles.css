@@ -1928,6 +1928,7 @@ html[data-theme='winter'] body::before {
 
 .voxel-greeting-word {
   position: relative;
+  z-index: 1;
   display: inline-block;
   font-family: 'Fraunces', serif;
   font-size: clamp(30px, 7vw, 58px);
@@ -1951,6 +1952,7 @@ html[data-theme='winter'] body::before {
   position: absolute;
   left: 50%;
   top: 50%;
+  z-index: 0;
   opacity: 0;
   pointer-events: none;
   white-space: nowrap;
@@ -1959,10 +1961,12 @@ html[data-theme='winter'] body::before {
   animation-fill-mode: forwards;
 }
 @keyframes voxel-burst {
-  0%   { opacity: 0; transform: translate(-50%, -50%) scale(0.3) rotate(0deg); }
-  10%  { opacity: 1; transform: translate(-50%, -50%) scale(1) rotate(var(--rot, 0deg)); }
-  45%  { opacity: 1; transform: translate(calc(-50% + var(--mx, 0px)), calc(-50% + var(--my, 0px))) scale(1) rotate(var(--rot, 0deg)); }
-  100% { opacity: 0; transform: translate(calc(-50% + var(--dx, 0px)), calc(-50% + var(--dy, 0px))) scale(0.9) rotate(var(--rot, 0deg)); }
+  /* Emojis start invisible and only fade in AFTER they've shot off the
+     center, so you never see them sitting in the middle waiting to move:
+     they pop, arc outward behind the word, and fade out. */
+  0%   { opacity: 0; transform: translate(-50%, -50%) scale(0.35) rotate(0deg); }
+  50%  { opacity: 1; transform: translate(calc(-50% + var(--mx, 0px)), calc(-50% + var(--my, 0px))) scale(1.05) rotate(var(--rot, 0deg)); }
+  100% { opacity: 0; transform: translate(calc(-50% + var(--dx, 0px)), calc(-50% + var(--dy, 0px))) scale(0.85) rotate(var(--rot, 0deg)); }
 }
 @media (prefers-reduced-motion: reduce) {
   .voxel-greeting-overlay { display: none; }
