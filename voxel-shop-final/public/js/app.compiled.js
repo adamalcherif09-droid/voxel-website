@@ -116,6 +116,10 @@ function App() {
     };
   }, []);
   React.useEffect(function () {
+    if (catalog.models && catalog.models.length) preloadImageRatios(catalog.models);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  React.useEffect(function () {
     Promise.all([storageGet("voxel-catalog"), storageGet("voxel-settings"), storageGet("voxel-content")]).then(function (results) {
       var catalogResult = results[0];
       var settingsResult = results[1];
@@ -153,6 +157,7 @@ function App() {
           categories: savedCatalog.categories || [],
           models: savedCatalog.models || []
         });
+        preloadImageRatios(savedCatalog.models || []);
         // If this page was opened from a link that points at one
         // specific model (the seller tapping the link inside a
         // WhatsApp order message, for example), open that model's

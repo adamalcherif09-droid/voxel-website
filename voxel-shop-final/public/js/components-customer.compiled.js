@@ -265,6 +265,9 @@ function ModelCard(props) {
     alt: model.name,
     loading: "lazy",
     decoding: "async",
+    onLoad: function (e) {
+      rememberImageRatio(model.id, e.currentTarget);
+    },
     style: {
       width: "100%",
       height: "auto",
@@ -272,9 +275,10 @@ function ModelCard(props) {
     }
   }) : /*#__PURE__*/React.createElement("div", {
     className: "voxel-img-placeholder",
+    "data-ratio": imageRatioFor(model.id),
     style: {
       width: "100%",
-      aspectRatio: "3 / 4"
+      aspectRatio: String(imageRatioFor(model.id))
     }
   }) : /*#__PURE__*/React.createElement(ImageIcon, {
     size: 26,

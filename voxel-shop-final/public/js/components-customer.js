@@ -173,9 +173,9 @@ function ModelCard(props) {
       <div className="flex items-center justify-center" style={{ background: "var(--panel-2)", minHeight: model.image ? undefined : 140, position: "relative" }}>
         {model.image ? (
           isActive ? (
-            <img src={model.image} alt={model.name} loading="lazy" decoding="async" style={{ width: "100%", height: "auto", display: "block" }} />
+            <img src={model.image} alt={model.name} loading="lazy" decoding="async" onLoad={function (e) { rememberImageRatio(model.id, e.currentTarget); }} style={{ width: "100%", height: "auto", display: "block" }} />
           ) : (
-            <div className="voxel-img-placeholder" style={{ width: "100%", aspectRatio: "3 / 4" }} />
+            <div className="voxel-img-placeholder" data-ratio={imageRatioFor(model.id)} style={{ width: "100%", aspectRatio: String(imageRatioFor(model.id)) }} />
           )
         ) : (
           <ImageIcon size={26} style={{ color: "var(--ink-dim)" }} />

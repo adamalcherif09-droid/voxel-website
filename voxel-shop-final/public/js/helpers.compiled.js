@@ -892,6 +892,40 @@ function formatDate(ts) {
   });
 }
 
+// Remembers each model photo's aspect ratio (width/height) once it has
+// loaded, so the virtual-masonry placeholder can reserve the SAME
+// height as the real image. Without this, a placeholder and its image
+// could differ in height and shift the masonry when one swaps for the
+// other. Keyed by model id; survives across views in this session. The
+// default (3/4) is a sensible stand-in only for a photo never seen yet.
+var imageRatioCache = {};
+function rememberImageRatio(modelId, img) {
+  if (!modelId || !img || !img.naturalWidth || !img.naturalHeight) return;
+  imageRatioCache[modelId] = img.naturalWidth / img.naturalHeight;
+}
+function imageRatioFor(modelId) {
+  var r = imageRatioCache[modelId];
+  return isFinite(r) && r > 0 ? r : 3 / 4;
+}
+
+// Learns every model photo's aspect ratio up front (off-screen, never
+// painted) so the virtual-masonry placeholder always reserves the exact
+// height its real image will have — no layout shift even on first paint.
+// Runs once after the catalog loads. Decodes each data URL behind the
+// scenes; failures are ignored (the ratio stays at the placeholder default).
+function preloadImageRatios(models) {
+  if (!Array.isArray(models)) return;
+  models.forEach(function (m) {
+    if (!m || !m.id || !m.image || imageRatioCache[m.id]) return;
+    var img = new window.Image();
+    img.onload = function () {
+      rememberImageRatio(m.id, img);
+    };
+    img.onerror = function () {};
+    img.src = m.image;
+  });
+}
+
 /* ---------------------------------------------------------
    Virtual masonry — only keeps images decoded for cards
    near the viewport. Cards stay in the DOM (no layout
