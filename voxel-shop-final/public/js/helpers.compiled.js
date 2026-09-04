@@ -891,6 +891,88 @@ function formatDate(ts) {
     minute: "2-digit"
   });
 }
+
+/* ---------------------------------------------------------
+   Virtual masonry — only keeps images decoded for cards
+   near the viewport. Cards stay in the DOM (no layout
+   jumps) but their <img> is swapped for a lightweight
+   placeholder when scrolled far away, freeing decoded
+   image memory.
+--------------------------------------------------------- */
+function useVirtualImages(containerRef) {
+  var _active = React.useState(function () {
+    return new Set();
+  });
+  var activeSet = _active[0];
+  var setActive = _active[1];
+  React.useEffect(function () {
+    var container = containerRef.current;
+    if (!container) return;
+    var active = new Set();
+    var seen = new WeakSet();
+    function scan() {
+      var vh = window.innerHeight || 800;
+      var items = container.querySelectorAll(".voxel-masonry-item[data-virtual-id]");
+      var changed = false;
+      var currentIds = new Set();
+      items.forEach(function (el) {
+        var id = el.getAttribute("data-virtual-id");
+        if (!id) return;
+        currentIds.add(id);
+        if (seen.has(el)) return;
+        seen.add(el);
+        var rect = el.getBoundingClientRect();
+        if (rect.bottom >= -400 && rect.top <= vh + 400 && !active.has(id)) {
+          active.add(id);
+          changed = true;
+        }
+        imgObs.observe(el);
+      });
+      active.forEach(function (id) {
+        if (!currentIds.has(id)) {
+          active.delete(id);
+          changed = true;
+        }
+      });
+      if (changed) setActive(new Set(active));
+    }
+    var imgObs = new IntersectionObserver(function (entries) {
+      var changed = false;
+      var vh = window.innerHeight || 800;
+      entries.forEach(function (e) {
+        var id = e.target.getAttribute("data-virtual-id");
+        if (!id) return;
+        if (e.isIntersecting) {
+          if (!active.has(id)) {
+            active.add(id);
+            changed = true;
+          }
+        } else {
+          var r = e.boundingClientRect;
+          if ((r.bottom < -800 || r.top > vh + 800) && active.has(id)) {
+            active.delete(id);
+            changed = true;
+          }
+        }
+      });
+      if (changed) setActive(new Set(active));
+    }, {
+      rootMargin: "400px 0px 400px 0px",
+      threshold: 0
+    });
+    scan();
+    var mutObs = new MutationObserver(scan);
+    mutObs.observe(container, {
+      childList: true,
+      subtree: true
+    });
+    return function () {
+      imgObs.disconnect();
+      mutObs.disconnect();
+    };
+  }, [containerRef]);
+  return activeSet;
+}
 function compressImage(file, options) {
   var preserveAlpha = !!(options && options.preserveAlpha);
   return new Promise(function (resolve, reject) {

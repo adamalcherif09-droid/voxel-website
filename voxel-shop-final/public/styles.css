@@ -375,6 +375,9 @@ h1.voxel-reveal {
   transform: scale(1);
   opacity: 1;
 }
+.voxel-img-placeholder {
+  background: var(--panel-2);
+}
 
 /* Spring-like button/card press feedback — critically damped, no overshoot:
    a tap isn't a momentum gesture, so no bounce (per apple-design's

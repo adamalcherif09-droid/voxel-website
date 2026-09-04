@@ -162,6 +162,7 @@ function ShareButton(props) {
 function ModelCard(props) {
   var model = props.model;
   var content = props.content;
+  var isActive = props.isActive !== false;
   var isNew = content.showNewBadge !== false && isNewModel(model, content.newBadgeDays);
   return (
     <div
@@ -171,7 +172,11 @@ function ModelCard(props) {
     >
       <div className="flex items-center justify-center" style={{ background: "var(--panel-2)", minHeight: model.image ? undefined : 140, position: "relative" }}>
         {model.image ? (
-          <img src={model.image} alt={model.name} loading="lazy" decoding="async" style={{ width: "100%", height: "auto", display: "block" }} />
+          isActive ? (
+            <img src={model.image} alt={model.name} loading="lazy" decoding="async" style={{ width: "100%", height: "auto", display: "block" }} />
+          ) : (
+            <div className="voxel-img-placeholder" style={{ width: "100%", aspectRatio: "3 / 4" }} />
+          )
         ) : (
           <ImageIcon size={26} style={{ color: "var(--ink-dim)" }} />
         )}
@@ -286,6 +291,8 @@ function HomeView(props) {
   var models = props.models;
   var featured = models.filter(function (m) { return m.featured; });
   var recentPrints = content.recentPrints || [];
+  var featuredMasonryRef = React.useRef(null);
+  var featuredActive = useVirtualImages(featuredMasonryRef);
 
   return (
     <div className="max-w-6xl mx-auto px-5 sm:px-8">
@@ -305,11 +312,11 @@ function HomeView(props) {
       {featured.length > 0 && (
         <section className="pb-14">
           <Eyebrow>{content.featuredEyebrow}</Eyebrow>
-          <div className="voxel-masonry">
+          <div className="voxel-masonry" ref={featuredMasonryRef}>
             {featured.map(function (m) {
               return (
-                <div key={m.id} className="voxel-masonry-item">
-                  <ModelCard model={m} content={content} onOrder={function () { props.onOrderModel(m); }} onView={function () { props.onViewModel(m); }} onAddToCart={function () { props.onAddToCart(m); }} highlight />
+                <div key={m.id} className="voxel-masonry-item" data-virtual-id={m.id}>
+                  <ModelCard model={m} content={content} isActive={featuredActive.has(m.id)} onOrder={function () { props.onOrderModel(m); }} onView={function () { props.onViewModel(m); }} onAddToCart={function () { props.onAddToCart(m); }} highlight />
                 </div>
               );
             })}
@@ -367,12 +374,8 @@ function CategoryView(props) {
   var category = props.category;
   var models = props.models;
   var _query = React.useState(""); var query = _query[0]; var setQuery = _query[1];
-  // Fresh category, fresh search — otherwise switching categories could
-  // silently keep filtering by the previous one's search text.
   React.useEffect(function () { setQuery(""); }, [category.id]);
   var q = query.trim().toLowerCase();
-  // The virtual "All Designs" category shows every model, regardless
-  // of which real category it's actually filed under.
   var items = category.id === ALL_DESIGNS_CATEGORY_ID
     ? models
     : models.filter(function (m) { return m.categoryId === category.id; });
@@ -382,6 +385,8 @@ function CategoryView(props) {
           (m.description || "").toLowerCase().indexOf(q) !== -1;
       })
     : items;
+  var masonryRef = React.useRef(null);
+  var activeSet = useVirtualImages(masonryRef);
 
   return (
     <div className="max-w-6xl mx-auto px-5 sm:px-8 py-10">
@@ -411,11 +416,11 @@ function CategoryView(props) {
       ) : visibleItems.length === 0 ? (
         <EmptyState icon={Package} title="No designs match your search" body={"Nothing here matches \"" + query.trim() + "\" — try a shorter word."} />
       ) : (
-        <div className="voxel-masonry">
+        <div className="voxel-masonry" ref={masonryRef}>
           {visibleItems.map(function (m) {
             return (
-              <div key={m.id} className="voxel-masonry-item">
-                <ModelCard model={m} content={content} onOrder={function () { props.onOrderModel(m); }} onView={function () { props.onViewModel(m); }} onAddToCart={function () { props.onAddToCart(m); }} />
+              <div key={m.id} className="voxel-masonry-item" data-virtual-id={m.id}>
+                <ModelCard model={m} content={content} isActive={activeSet.has(m.id)} onOrder={function () { props.onOrderModel(m); }} onView={function () { props.onViewModel(m); }} onAddToCart={function () { props.onAddToCart(m); }} />
               </div>
             );
           })}

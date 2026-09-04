@@ -244,6 +244,7 @@ function ShareButton(props) {
 function ModelCard(props) {
   var model = props.model;
   var content = props.content;
+  var isActive = props.isActive !== false;
   var isNew = content.showNewBadge !== false && isNewModel(model, content.newBadgeDays);
   return /*#__PURE__*/React.createElement("div", {
     onClick: props.onView,
@@ -259,7 +260,7 @@ function ModelCard(props) {
       minHeight: model.image ? undefined : 140,
       position: "relative"
     }
-  }, model.image ? /*#__PURE__*/React.createElement("img", {
+  }, model.image ? isActive ? /*#__PURE__*/React.createElement("img", {
     src: model.image,
     alt: model.name,
     loading: "lazy",
@@ -268,6 +269,12 @@ function ModelCard(props) {
       width: "100%",
       height: "auto",
       display: "block"
+    }
+  }) : /*#__PURE__*/React.createElement("div", {
+    className: "voxel-img-placeholder",
+    style: {
+      width: "100%",
+      aspectRatio: "3 / 4"
     }
   }) : /*#__PURE__*/React.createElement(ImageIcon, {
     size: 26,
@@ -416,6 +423,8 @@ function HomeView(props) {
     return m.featured;
   });
   var recentPrints = content.recentPrints || [];
+  var featuredMasonryRef = React.useRef(null);
+  var featuredActive = useVirtualImages(featuredMasonryRef);
   return /*#__PURE__*/React.createElement("div", {
     className: "max-w-6xl mx-auto px-5 sm:px-8"
   }, /*#__PURE__*/React.createElement("section", {
@@ -439,14 +448,17 @@ function HomeView(props) {
   }), featured.length > 0 && /*#__PURE__*/React.createElement("section", {
     className: "pb-14"
   }, /*#__PURE__*/React.createElement(Eyebrow, null, content.featuredEyebrow), /*#__PURE__*/React.createElement("div", {
-    className: "voxel-masonry"
+    className: "voxel-masonry",
+    ref: featuredMasonryRef
   }, featured.map(function (m) {
     return /*#__PURE__*/React.createElement("div", {
       key: m.id,
-      className: "voxel-masonry-item"
+      className: "voxel-masonry-item",
+      "data-virtual-id": m.id
     }, /*#__PURE__*/React.createElement(ModelCard, {
       model: m,
       content: content,
+      isActive: featuredActive.has(m.id),
       onOrder: function () {
         props.onOrderModel(m);
       },
@@ -542,20 +554,18 @@ function CategoryView(props) {
   var _query = React.useState("");
   var query = _query[0];
   var setQuery = _query[1];
-  // Fresh category, fresh search — otherwise switching categories could
-  // silently keep filtering by the previous one's search text.
   React.useEffect(function () {
     setQuery("");
   }, [category.id]);
   var q = query.trim().toLowerCase();
-  // The virtual "All Designs" category shows every model, regardless
-  // of which real category it's actually filed under.
   var items = category.id === ALL_DESIGNS_CATEGORY_ID ? models : models.filter(function (m) {
     return m.categoryId === category.id;
   });
   var visibleItems = q ? items.filter(function (m) {
     return (m.name || "").toLowerCase().indexOf(q) !== -1 || (m.description || "").toLowerCase().indexOf(q) !== -1;
   }) : items;
+  var masonryRef = React.useRef(null);
+  var activeSet = useVirtualImages(masonryRef);
   return /*#__PURE__*/React.createElement("div", {
     className: "max-w-6xl mx-auto px-5 sm:px-8 py-10"
   }, /*#__PURE__*/React.createElement("button", {
@@ -599,14 +609,17 @@ function CategoryView(props) {
     title: "No designs match your search",
     body: "Nothing here matches \"" + query.trim() + "\" — try a shorter word."
   }) : /*#__PURE__*/React.createElement("div", {
-    className: "voxel-masonry"
+    className: "voxel-masonry",
+    ref: masonryRef
   }, visibleItems.map(function (m) {
     return /*#__PURE__*/React.createElement("div", {
       key: m.id,
-      className: "voxel-masonry-item"
+      className: "voxel-masonry-item",
+      "data-virtual-id": m.id
     }, /*#__PURE__*/React.createElement(ModelCard, {
       model: m,
       content: content,
+      isActive: activeSet.has(m.id),
       onOrder: function () {
         props.onOrderModel(m);
       },
