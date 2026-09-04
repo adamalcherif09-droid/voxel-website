@@ -1,0 +1,468 @@
+function BrandMark(props) {
+  var size = props && props.size || 26;
+  return /*#__PURE__*/React.createElement("svg", {
+    width: size,
+    height: size,
+    viewBox: "0 0 32 32",
+    fill: "none",
+    "aria-hidden": "true"
+  }, /*#__PURE__*/React.createElement("rect", {
+    className: "voxel-mark-bar voxel-mark-1",
+    x: "4",
+    y: "22",
+    width: "24",
+    height: "4",
+    rx: "1.5",
+    fill: "var(--brass)"
+  }), /*#__PURE__*/React.createElement("rect", {
+    className: "voxel-mark-bar voxel-mark-2",
+    x: "8",
+    y: "15",
+    width: "16",
+    height: "4",
+    rx: "1.5",
+    fill: "var(--brass)",
+    opacity: "0.78"
+  }), /*#__PURE__*/React.createElement("rect", {
+    className: "voxel-mark-bar voxel-mark-3",
+    x: "12",
+    y: "8",
+    width: "8",
+    height: "4",
+    rx: "1.5",
+    fill: "var(--brass)",
+    opacity: "0.55"
+  }));
+}
+function ShapeIcon(props) {
+  var shape = props.shape;
+  var size = props.size || 20;
+  var color = "var(--ink-dim)";
+  var common = {
+    width: size,
+    height: size,
+    viewBox: "0 0 20 20",
+    fill: "none",
+    stroke: color,
+    strokeWidth: "2"
+  };
+  if (shape === "circle") return /*#__PURE__*/React.createElement("svg", common, /*#__PURE__*/React.createElement("circle", {
+    cx: "10",
+    cy: "10",
+    r: "8"
+  }));
+  if (shape === "square") return /*#__PURE__*/React.createElement("svg", common, /*#__PURE__*/React.createElement("rect", {
+    x: "3",
+    y: "3",
+    width: "14",
+    height: "14"
+  }));
+  if (shape === "triangle") return /*#__PURE__*/React.createElement("svg", common, /*#__PURE__*/React.createElement("polygon", {
+    points: "10,3 17,17 3,17"
+  }));
+  if (shape === "diamond") return /*#__PURE__*/React.createElement("svg", common, /*#__PURE__*/React.createElement("polygon", {
+    points: "10,2 18,10 10,18 2,10"
+  }));
+  if (shape === "star") return /*#__PURE__*/React.createElement("svg", {
+    ...common,
+    strokeWidth: "1.5"
+  }, /*#__PURE__*/React.createElement("polygon", {
+    points: "10,2 12.5,7.5 18,8 13.5,11.7 15,17.5 10,14.2 5,17.5 6.5,11.7 2,8 7.5,7.5"
+  }));
+  if (shape === "hexagon") return /*#__PURE__*/React.createElement("svg", common, /*#__PURE__*/React.createElement("polygon", {
+    points: "6,3 14,3 18,10 14,17 6,17 2,10"
+  }));
+  return null;
+}
+function Eyebrow(props) {
+  return /*#__PURE__*/React.createElement("div", {
+    className: "voxel-eyebrow font-mono-ac text-xs tracking-widest uppercase mb-2",
+    style: {
+      color: "var(--teal)"
+    }
+  }, props.children);
+}
+function EmptyState(props) {
+  var Icon = props.icon;
+  return /*#__PURE__*/React.createElement("div", {
+    className: "flex flex-col items-center text-center py-16 px-6 rounded-lg",
+    style: {
+      border: "1px dashed var(--line)"
+    }
+  }, /*#__PURE__*/React.createElement(Icon, {
+    size: 28,
+    style: {
+      color: "var(--ink-dim)"
+    }
+  }), /*#__PURE__*/React.createElement("div", {
+    className: "font-display text-lg mt-4",
+    style: {
+      color: "var(--ink)"
+    }
+  }, props.title), /*#__PURE__*/React.createElement("p", {
+    className: "text-sm mt-1 max-w-xs",
+    style: {
+      color: "var(--ink-dim)"
+    }
+  }, props.body));
+}
+function PrimaryButton(props) {
+  var Icon = props.icon;
+  var type = props.type || "button";
+  return /*#__PURE__*/React.createElement("button", {
+    type: type,
+    onClick: props.onClick,
+    disabled: props.disabled,
+    className: "inline-flex items-center justify-center gap-2 px-5 py-3 rounded-md text-sm font-medium border-0 cursor-pointer" + (props.disabled ? "" : " liquid-glass tint-brass voxel-magnetic") + (props.className ? " " + props.className : ""),
+    style: {
+      background: props.disabled ? "var(--line)" : undefined,
+      color: props.disabled ? "var(--ink-dim)" : "#161618",
+      opacity: props.disabled ? 0.7 : 1
+    }
+  }, Icon && /*#__PURE__*/React.createElement(Icon, {
+    size: 16
+  }), props.children);
+}
+function SecondaryButton(props) {
+  var Icon = props.icon;
+  return /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: props.onClick,
+    disabled: props.disabled,
+    className: "inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-md text-sm font-medium cursor-pointer" + (props.className ? " " + props.className : ""),
+    style: {
+      background: "transparent",
+      color: props.disabled ? "var(--ink-dim)" : "var(--ink)",
+      border: "1px solid var(--line)",
+      opacity: props.disabled ? 0.6 : 1
+    }
+  }, Icon && /*#__PURE__*/React.createElement(Icon, {
+    size: 16
+  }), props.children);
+}
+function SkeletonBlock(props) {
+  var radius = props.radius === undefined ? 8 : props.radius;
+  return /*#__PURE__*/React.createElement("div", {
+    className: "skeleton-shimmer",
+    style: Object.assign({
+      width: props.width,
+      height: props.height,
+      borderRadius: radius,
+      flexShrink: 0
+    }, props.style)
+  });
+}
+function SkeletonScreen() {
+  return /*#__PURE__*/React.createElement("div", {
+    className: "voxel-root"
+  }, /*#__PURE__*/React.createElement("header", {
+    style: {
+      borderBottom: "1px solid var(--line)"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "max-w-6xl mx-auto flex items-center justify-between px-5 sm:px-8 py-4"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "flex items-center gap-3"
+  }, /*#__PURE__*/React.createElement(SkeletonBlock, {
+    width: 60,
+    height: 60,
+    radius: 10
+  }), /*#__PURE__*/React.createElement(SkeletonBlock, {
+    width: 90,
+    height: 22,
+    radius: 4
+  })), /*#__PURE__*/React.createElement(SkeletonBlock, {
+    width: 120,
+    height: 40,
+    radius: 8
+  }))), /*#__PURE__*/React.createElement("div", {
+    className: "max-w-6xl mx-auto px-5 sm:px-8"
+  }, /*#__PURE__*/React.createElement("section", {
+    className: "pt-14 sm:pt-20 pb-10"
+  }, /*#__PURE__*/React.createElement(SkeletonBlock, {
+    width: 190,
+    height: 13,
+    radius: 4,
+    style: {
+      marginBottom: 18
+    }
+  }), /*#__PURE__*/React.createElement(SkeletonBlock, {
+    width: "65%",
+    height: 38,
+    radius: 6,
+    style: {
+      marginBottom: 10,
+      maxWidth: 420
+    }
+  }), /*#__PURE__*/React.createElement(SkeletonBlock, {
+    width: "45%",
+    height: 38,
+    radius: 6,
+    style: {
+      marginBottom: 22,
+      maxWidth: 300
+    }
+  }), /*#__PURE__*/React.createElement(SkeletonBlock, {
+    width: "85%",
+    height: 15,
+    radius: 4,
+    style: {
+      marginBottom: 8,
+      maxWidth: 520
+    }
+  }), /*#__PURE__*/React.createElement(SkeletonBlock, {
+    width: "55%",
+    height: 15,
+    radius: 4,
+    style: {
+      maxWidth: 340
+    }
+  })), /*#__PURE__*/React.createElement("section", {
+    className: "pb-14"
+  }, /*#__PURE__*/React.createElement(SkeletonBlock, {
+    width: 100,
+    height: 13,
+    radius: 4,
+    style: {
+      marginBottom: 16
+    }
+  }), /*#__PURE__*/React.createElement("div", {
+    className: "grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4"
+  }, Array.from({
+    length: 8
+  }).map(function (_, i) {
+    return /*#__PURE__*/React.createElement("div", {
+      key: i,
+      className: "p-5 rounded-lg",
+      style: {
+        background: "var(--panel)",
+        border: "1px solid var(--line)"
+      }
+    }, /*#__PURE__*/React.createElement(SkeletonBlock, {
+      width: 18,
+      height: 18,
+      radius: 4,
+      style: {
+        marginBottom: 14
+      }
+    }), /*#__PURE__*/React.createElement(SkeletonBlock, {
+      width: "75%",
+      height: 15,
+      radius: 4,
+      style: {
+        marginBottom: 8
+      }
+    }), /*#__PURE__*/React.createElement(SkeletonBlock, {
+      width: "45%",
+      height: 11,
+      radius: 4
+    }));
+  }))), /*#__PURE__*/React.createElement("section", {
+    className: "pb-16"
+  }, /*#__PURE__*/React.createElement(SkeletonBlock, {
+    width: "100%",
+    height: 110,
+    radius: 12
+  }))));
+}
+
+// Error boundary — if ANY component ever throws during render, React
+// unmounts the whole tree and the visitor sees a blank white page.
+// This catches the crash at the top, keeps the site's look, and offers
+// a one-click recovery instead of a dead screen.
+// NOTE: declared via a `var` (a class EXPRESSION) rather than a bare
+// `class` declaration — the site compiles JSX on the fly and runs each
+// file through an indirect eval, where top-level `let`/`const`/`class`
+// bindings don't leak into the global scope. A `var` does, exactly like
+// the rest of these files' `function` components, so app.js can reach
+// this component reliably.
+var ErrorBoundary = class extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = {
+      hasError: false
+    };
+  }
+  static getDerivedStateFromError() {
+    return {
+      hasError: true
+    };
+  }
+  componentDidCatch(error, info) {
+    // Detail goes to the console for debugging; the visitor only sees
+    // the friendly recovery screen below.
+    console.error("UI crash caught by error boundary:", error, info);
+  }
+  render() {
+    if (this.state.hasError) {
+      return /*#__PURE__*/React.createElement("div", {
+        className: "voxel-root"
+      }, /*#__PURE__*/React.createElement("div", {
+        className: "max-w-md mx-auto px-6 py-24 text-center"
+      }, /*#__PURE__*/React.createElement("div", {
+        className: "font-display text-xl",
+        style: {
+          color: "var(--ink)"
+        }
+      }, "Something glitched on the page"), /*#__PURE__*/React.createElement("p", {
+        className: "text-sm mt-3",
+        style: {
+          color: "var(--ink-dim)"
+        }
+      }, "Don't worry — your cart and the shop's data are safe. Reloading the page fixes this almost every time."), /*#__PURE__*/React.createElement("div", {
+        className: "mt-6"
+      }, /*#__PURE__*/React.createElement(PrimaryButton, {
+        onClick: function () {
+          window.location.reload();
+        }
+      }, "Reload the page"))));
+    }
+    return this.props.children;
+  }
+};
+
+/* The seasonal greeting: when the site loads under a themed look, a
+   fixed overlay animates the theme's "Happy <holiday>" into view letter
+   by letter, while a small cascade of the theme's own emojis bursts off
+   the word like fireworks. It then fades itself out (~3s) and unmounts,
+   so it never blocks the shop. The default look shows nothing.
+   Rendered lazily by app.js so it only exists while it has something to
+   say; onDone lets the parent drop the component once it's finished. */
+function ThemeGreeting(props) {
+  var theme = props.theme;
+  var onDone = props.onDone || function () {};
+  var g = getThemeGreeting(theme);
+  var _vis = React.useState(true);
+  var visible = _vis[0];
+  var setVisible = _vis[1];
+  var _parts = React.useState([]);
+  var parts = _parts[0];
+  var setParts = _parts[1];
+  var _gone = React.useState(false);
+  var gone = _gone[0];
+  var setGone = _gone[1];
+  var _flashKey = React.useState(0);
+  var flashKey = _flashKey[0];
+  var setFlashKey = _flashKey[1];
+  React.useEffect(function () {
+    if (!g) return;
+
+    // A real firework "pop": one simultaneous full-circle burst (not a
+    // trickle) with a bright flash at the center, sparks that shoot out
+    // fast, arc under gravity, and die. Two breaks fire so it feels like
+    // a classic double-burst shell.
+    var start = Date.now();
+    var pid = 0;
+    var pop = function (count, spread, durScale) {
+      var emojis = g.emojis;
+      var next = [];
+      for (var i = 0; i < count; i++) {
+        // Evenly spaced around the full circle, with jitter + varied radius
+        // so the burst fills a ring/sphere like real sparks.
+        var angle = i / count * Math.PI * 2 + (Math.random() - 0.5) * 0.4;
+        var dist = spread * (0.6 + Math.random() * 0.7);
+        var dx = Math.cos(angle) * dist;
+        var dy = Math.sin(angle) * dist;
+        // Gravity arc: bows up over the straight line so sparks curve down.
+        var arcH = 24 + Math.random() * 55;
+        next.push({
+          id: start + "-" + pid++ + "-" + Math.random(),
+          emoji: emojis[Math.floor(Math.random() * emojis.length)],
+          dx: Math.round(dx),
+          dy: Math.round(dy),
+          fx: Math.round(dx * 0.3),
+          fy: Math.round(dy * 0.3),
+          mx: Math.round(dx * 0.5),
+          my: Math.round(dy * 0.5 - arcH),
+          rot: Math.round(Math.random() * 200 - 100),
+          size: 16 + Math.round(Math.random() * 16),
+          lifespan: Math.round((550 + Math.random() * 300) * durScale)
+        });
+      }
+      setParts(function (old) {
+        return old.concat(next);
+      });
+      setFlashKey(function (k) {
+        return (k || 0) + 1;
+      });
+    };
+
+    // First (main) pop as the word starts revealing, then a second, smaller
+    // break as it finishes — a double-burst firework.
+    var t1 = setTimeout(function () {
+      pop(20, 190, 1);
+    }, 260);
+    var t2 = setTimeout(function () {
+      pop(14, 165, 0.85);
+    }, 1250);
+
+    // Let the last sparks die, then fade the greeting out.
+    var tExit = setTimeout(function () {
+      setVisible(false);
+      setTimeout(function () {
+        setGone(true);
+        onDone();
+      }, 520);
+    }, 2050);
+    return function () {
+      clearTimeout(t1);
+      clearTimeout(t2);
+      clearTimeout(tExit);
+    };
+  }, []);
+  if (!g || gone) return null;
+
+  // Split into words, then letters, so spaces are preserved and each
+  // letter animates in with its own tiny delay.
+  var words = g.text.split(" ");
+  var letterIdx = 0;
+  var letters = words.map(function (word, wi) {
+    var spans = word.split("").map(function (ch) {
+      return /*#__PURE__*/React.createElement("span", {
+        key: "l" + letterIdx,
+        style: {
+          animationDelay: 0.08 + letterIdx * 0.055 + "s"
+        }
+      }, ch);
+    });
+    return /*#__PURE__*/React.createElement("span", {
+      key: "w" + wi,
+      style: {
+        whiteSpace: "pre"
+      }
+    }, spans, wi < words.length - 1 ? /*#__PURE__*/React.createElement("span", {
+      style: {
+        display: "inline-block",
+        width: "0.32em"
+      }
+    }, "\xA0") : null);
+  });
+  return /*#__PURE__*/React.createElement("div", {
+    className: "voxel-greeting-overlay" + (visible ? "" : " voxel-greeting-exit"),
+    role: "presentation",
+    "aria-hidden": "true"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "voxel-greeting-inner"
+  }, flashKey > 0 && /*#__PURE__*/React.createElement("span", {
+    key: flashKey,
+    className: "voxel-greeting-flash"
+  }), parts.map(function (p) {
+    return /*#__PURE__*/React.createElement("span", {
+      key: p.id,
+      className: "voxel-greeting-particle",
+      style: {
+        "--dx": p.dx + "px",
+        "--dy": p.dy + "px",
+        "--fx": p.fx + "px",
+        "--fy": p.fy + "px",
+        "--mx": p.mx + "px",
+        "--my": p.my + "px",
+        "--rot": p.rot + "deg",
+        fontSize: p.size + "px",
+        animationDuration: p.lifespan + "ms"
+      }
+    }, p.emoji);
+  }), /*#__PURE__*/React.createElement("div", {
+    className: "voxel-greeting-word"
+  }, letters)));
+}

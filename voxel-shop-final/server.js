@@ -11,10 +11,14 @@ app.disable("x-powered-by");
 // hop — this makes req.ip / X-Forwarded-For accurate for rate limiting.
 app.set("trust proxy", 1);
 // gzip shrinks API responses a lot — the catalog carries embedded
-// photos as base64 text. Level 1 (instead of the default 6) cuts CPU
-// dramatically with only a modest size penalty: on a 512MB free-tier
-// host, CPU is scarcer than a few extra response bytes.
-app.use(compression({ level: 1 }));
+// photos as base64 text. Level 6 (the classic default) produces
+// noticeably smaller payloads than level 1 — a real win for mobile
+// data users since the catalog travels as one JSON document. The
+// original build chose level 1 to save CPU; at this site's actual
+// traffic the compression only runs a few dozen times per minute and
+// costs milliseconds, so bytes-for-visitors wins. Revisit only if the
+// free-tier instance ever CPU-throttles under real load.
+app.use(compression({ level: 6 }));
 // Catalog entries include compressed photos as text, so allow a
 // generous body size for the admin's storage writes. SIZED FOR THE
 // CATALOG PLAN: ~500 models x ~120KB of base64 photo each is roughly
@@ -28,9 +32,10 @@ app.use("/api", express.json({ limit: "32kb" }));
 
 /* ---------------------------------------------------------
    Security headers — applied to every response. The CSP allows
-   exactly what this site uses and nothing more: React/Babel from
-   unpkg, Google Fonts, Microlink (owner's link-fetch tool), inline
-   scripts + Babel's eval (the no-build JSX pipeline needs both),
+   exactly what this site uses and nothing more: self-hosted
+   React, Google Fonts, Microlink (owner's link-fetch tool),
+   inline scripts (the bootstrap + JSON-LD need it — the app
+   itself is pre-compiled, so no eval/unsafe-eval is needed),
    data: images (compressed product photos) and https: images
    (photos pulled in from MakerWorld/Printables/Thingiverse).
    frame-ancestors 'none' also blocks clickjacking.
@@ -40,7 +45,7 @@ app.use((req, res, next) => {
     "Content-Security-Policy",
     [
       "default-src 'self'",
-      "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+      "script-src 'self' 'unsafe-inline'",
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "font-src https://fonts.gstatic.com",
       "img-src 'self' data: blob: https:",
@@ -711,6 +716,13 @@ app.get("/api/storage/:key", rateLimit("read", 240, 60 * 1000), async (req, res)
       return;
     }
     let value = await storageGet(key);
+    // The catalog is large, changes rarely, and is re-read by every
+    // returning visitor. no-cache + ETag lets the browser revalidate
+    // (If-None-Match) instead of re-downloading: when nothing changed
+    // Express answers 304 and the visitor transfers zero bytes. The
+    // resource is still checked on every load, so admin edits appear
+    // immediately — this is revalidation, not stale caching.
+    res.setHeader("Cache-Control", "no-cache");
     // Strip secrets from the public settings payload. The Discord
     // webhook URL and the passcode hash must never reach a browser:
     // anyone could spam/delete the webhook or brute-force the hash
@@ -1612,6 +1624,15 @@ async function start() {
   }
 
   await seedMissingKeys();
+
+  // Warm the in-memory raw-doc cache for the keys visitors load first,
+  // so the very first request doesn't eat a cold Atlas read on top of
+  // the platform waking the instance. Seeds above already touched each
+  // key once; this is an explicit belt-and-braces pull to guarantee the
+  // cache is full before we start accepting requests.
+  for (const k of ["voxel-catalog", "voxel-settings", "voxel-content"]) {
+    try { await storageGet(k); } catch (e) { /* best-effort warm */ }
+  }
 
   // Warm the admin session cache from the persisted map so sessions
   // granted before a restart/redeploy keep working (see note above).

@@ -4,40 +4,80 @@ function App() {
   // shop immediately instead of staring at a loader, then revalidate
   // against the server below. The merges mirror the network path exactly
   // so cached and fresh states are shaped identically.
-  var _cached = React.useState(readPageCache()); var cached = _cached[0];
+  var _cached = React.useState(readPageCache());
+  var cached = _cached[0];
   var cachedCatalog = cached ? cached.catalog : null;
   var cachedSettings = cached ? cached.settings : null;
   var cachedContent = cached ? cached.content : null;
-
-  var _loading = React.useState(!cachedCatalog); var loading = _loading[0]; var setLoading = _loading[1];
-  var _content = React.useState(cachedContent ? Object.assign({}, DEFAULT_CONTENT, cachedContent) : DEFAULT_CONTENT); var content = _content[0]; var setContent = _content[1];
-  var _catalog = React.useState(cachedCatalog ? { categories: cachedCatalog.categories || [], models: cachedCatalog.models || [] } : { categories: [], models: [] }); var catalog = _catalog[0]; var setCatalog = _catalog[1];
+  var _loading = React.useState(!cachedCatalog);
+  var loading = _loading[0];
+  var setLoading = _loading[1];
+  var _content = React.useState(cachedContent ? Object.assign({}, DEFAULT_CONTENT, cachedContent) : DEFAULT_CONTENT);
+  var content = _content[0];
+  var setContent = _content[1];
+  var _catalog = React.useState(cachedCatalog ? {
+    categories: cachedCatalog.categories || [],
+    models: cachedCatalog.models || []
+  } : {
+    categories: [],
+    models: []
+  });
+  var catalog = _catalog[0];
+  var setCatalog = _catalog[1];
   var categories = catalog.categories;
   var models = catalog.models;
-  var _inquiries = React.useState([]); var inquiries = _inquiries[0]; var setInquiries = _inquiries[1];
-  var _settings = React.useState(cachedSettings ? Object.assign({}, DEFAULT_SETTINGS, cachedSettings, { security: Object.assign({}, DEFAULT_SECURITY, cachedSettings.security || {}) }) : DEFAULT_SETTINGS); var settings = _settings[0]; var setSettings = _settings[1];
-
-  var _view = React.useState("home"); var view = _view[0]; var setView = _view[1];
-  var _activeCategory = React.useState(null); var activeCategory = _activeCategory[0]; var setActiveCategory = _activeCategory[1];
-  var _orderPopupItem = React.useState(null); var orderPopupItem = _orderPopupItem[0]; var setOrderPopupItem = _orderPopupItem[1];
-  var _viewingModel = React.useState(null); var viewingModel = _viewingModel[0]; var setViewingModel = _viewingModel[1];
-  var _isAdmin = React.useState(false); var isAdmin = _isAdmin[0]; var setIsAdmin = _isAdmin[1];
-  var _adminTab = React.useState("orders"); var adminTab = _adminTab[0]; var setAdminTab = _adminTab[1];
-  var _loadError = React.useState(false); var loadError = _loadError[0]; var setLoadError = _loadError[1];
+  var _inquiries = React.useState([]);
+  var inquiries = _inquiries[0];
+  var setInquiries = _inquiries[1];
+  var _settings = React.useState(cachedSettings ? Object.assign({}, DEFAULT_SETTINGS, cachedSettings, {
+    security: Object.assign({}, DEFAULT_SECURITY, cachedSettings.security || {})
+  }) : DEFAULT_SETTINGS);
+  var settings = _settings[0];
+  var setSettings = _settings[1];
+  var _view = React.useState("home");
+  var view = _view[0];
+  var setView = _view[1];
+  var _activeCategory = React.useState(null);
+  var activeCategory = _activeCategory[0];
+  var setActiveCategory = _activeCategory[1];
+  var _orderPopupItem = React.useState(null);
+  var orderPopupItem = _orderPopupItem[0];
+  var setOrderPopupItem = _orderPopupItem[1];
+  var _viewingModel = React.useState(null);
+  var viewingModel = _viewingModel[0];
+  var setViewingModel = _viewingModel[1];
+  var _isAdmin = React.useState(false);
+  var isAdmin = _isAdmin[0];
+  var setIsAdmin = _isAdmin[1];
+  var _adminTab = React.useState("orders");
+  var adminTab = _adminTab[0];
+  var setAdminTab = _adminTab[1];
+  var _loadError = React.useState(false);
+  var loadError = _loadError[0];
+  var setLoadError = _loadError[1];
 
   // Shopping cart: a plain array of line items that lives in the
   // visitor's localStorage (see loadCart/saveCart in helpers.js). It is
   // customer-side state only — nothing about it touches the backend.
-  var _cart = React.useState(loadCart); var cart = _cart[0]; var setCart = _cart[1];
-  var _cartOpen = React.useState(false); var cartOpen = _cartOpen[0]; var setCartOpen = _cartOpen[1];
-  var _quickAddModel = React.useState(null); var quickAddModel = _quickAddModel[0]; var setQuickAddModel = _quickAddModel[1];
-  var _cartToast = React.useState(false); var cartToast = _cartToast[0]; var setCartToast = _cartToast[1];
+  var _cart = React.useState(loadCart);
+  var cart = _cart[0];
+  var setCart = _cart[1];
+  var _cartOpen = React.useState(false);
+  var cartOpen = _cartOpen[0];
+  var setCartOpen = _cartOpen[1];
+  var _quickAddModel = React.useState(null);
+  var quickAddModel = _quickAddModel[0];
+  var setQuickAddModel = _quickAddModel[1];
+  var _cartToast = React.useState(false);
+  var cartToast = _cartToast[0];
+  var setCartToast = _cartToast[1];
   var toastTimer = React.useRef(null);
   // A cart that was saved on this device before the customer ordered a
   // design directly (which clears it at the redirect). On their next
   // visit we offer it back instead of letting it vanish silently.
-  var _savedCartOffer = React.useState(null); var savedCartOffer = _savedCartOffer[0]; var setSavedCartOffer = _savedCartOffer[1];
-
+  var _savedCartOffer = React.useState(null);
+  var savedCartOffer = _savedCartOffer[0];
+  var setSavedCartOffer = _savedCartOffer[1];
   React.useEffect(function () {
     // One-time offer on load: a previous "Order now" cleared the saved
     // cart but archived it here first — ask whether to bring it back.
@@ -48,28 +88,35 @@ function App() {
   // guards the checkout against a double-tap logging the same order
   // twice (the WhatsApp link itself is a real <a> now, so it keeps
   // working even where browsers block window.open popups like iOS).
-  var _lastAdd = React.useState(null); var lastAdd = _lastAdd[0]; var setLastAdd = _lastAdd[1];
+  var _lastAdd = React.useState(null);
+  var lastAdd = _lastAdd[0];
+  var setLastAdd = _lastAdd[1];
   var checkingOutRef = React.useRef(false);
   var greetingShownForRef = React.useRef(null);
-  var _firstScrolled = React.useState(false); var firstScrolled = _firstScrolled[0]; var setFirstScrolled = _firstScrolled[1];
+  var _firstScrolled = React.useState(false);
+  var firstScrolled = _firstScrolled[0];
+  var setFirstScrolled = _firstScrolled[1];
   React.useEffect(function () {
     function onScroll() {
       if (window.pageYOffset > 8) setFirstScrolled(true);
     }
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return function () { window.removeEventListener("scroll", onScroll); };
+    window.addEventListener("scroll", onScroll, {
+      passive: true
+    });
+    return function () {
+      window.removeEventListener("scroll", onScroll);
+    };
   }, []);
-  React.useEffect(function () { saveCart(cart); }, [cart]);
   React.useEffect(function () {
-    return function () { if (toastTimer.current) clearTimeout(toastTimer.current); };
+    saveCart(cart);
+  }, [cart]);
+  React.useEffect(function () {
+    return function () {
+      if (toastTimer.current) clearTimeout(toastTimer.current);
+    };
   }, []);
-
   React.useEffect(function () {
-    Promise.all([
-      storageGet("voxel-catalog"),
-      storageGet("voxel-settings"),
-      storageGet("voxel-content"),
-    ]).then(function (results) {
+    Promise.all([storageGet("voxel-catalog"), storageGet("voxel-settings"), storageGet("voxel-content")]).then(function (results) {
       var catalogResult = results[0];
       var settingsResult = results[1];
       var contentResult = results[2];
@@ -94,7 +141,6 @@ function App() {
         }
         return;
       }
-
       var savedCatalog = catalogResult.value;
       var savedSettings = settingsResult.value;
       var savedContent = contentResult.value;
@@ -103,7 +149,10 @@ function App() {
       // the browser never needs (and is never allowed) to write shop
       // data without an admin session.
       if (savedCatalog) {
-        setCatalog({ categories: savedCatalog.categories || [], models: savedCatalog.models || [] });
+        setCatalog({
+          categories: savedCatalog.categories || [],
+          models: savedCatalog.models || []
+        });
         // If this page was opened from a link that points at one
         // specific model (the seller tapping the link inside a
         // WhatsApp order message, for example), open that model's
@@ -111,33 +160,40 @@ function App() {
         try {
           var sharedId = new URLSearchParams(window.location.search).get("model");
           if (sharedId) {
-            var sharedModel = (savedCatalog.models || []).find(function (m) { return m.id === sharedId; });
+            var sharedModel = (savedCatalog.models || []).find(function (m) {
+              return m.id === sharedId;
+            });
             if (sharedModel) setViewingModel(sharedModel);
           }
-        } catch (e) { /* no query string support — just show the home page */ }
+        } catch (e) {/* no query string support — just show the home page */}
       } else {
-        setCatalog({ categories: DEFAULT_CATEGORIES, models: [] });
+        setCatalog({
+          categories: DEFAULT_CATEGORIES,
+          models: []
+        });
       }
 
       // Inquiries are private (customer names/notes) — they are loaded
       // with the admin session token only after the owner passes the
       // gate, never on the public page load.
       setInquiries([]);
-
       if (savedSettings) {
         var savedSecurity = Object.assign({}, savedSettings.security || {});
         var mergedSettings = Object.assign({}, DEFAULT_SETTINGS, savedSettings, {
-          security: Object.assign({}, DEFAULT_SECURITY, savedSecurity),
+          security: Object.assign({}, DEFAULT_SECURITY, savedSecurity)
         });
         setSettings(mergedSettings);
       } else {
         setSettings(DEFAULT_SETTINGS);
       }
-
       setContent(savedContent ? Object.assign({}, DEFAULT_CONTENT, savedContent) : DEFAULT_CONTENT);
       // Every piece of data arrived healthy — snapshot it so the next
       // visit paints instantly from the cache before the network answers.
-      savePageCache({ catalog: savedCatalog, settings: savedSettings, content: savedContent });
+      savePageCache({
+        catalog: savedCatalog,
+        settings: savedSettings,
+        content: savedContent
+      });
       setLoading(false);
     });
   }, []);
@@ -159,21 +215,27 @@ function App() {
       if (meta) {
         var match = null;
         for (var i = 0; i < SITE_THEMES.length; i++) {
-          if (SITE_THEMES[i].id === themeId) { match = SITE_THEMES[i]; break; }
+          if (SITE_THEMES[i].id === themeId) {
+            match = SITE_THEMES[i];
+            break;
+          }
         }
         meta.setAttribute("content", match ? match.canvas : "#d5c4ba");
       }
-    } catch (e) { /* theme is cosmetic — never block rendering */ }
+    } catch (e) {/* theme is cosmetic — never block rendering */}
   }, [content.theme]);
-
-  var _reauthHint = React.useState(false); var reauthHint = _reauthHint[0]; var setReauthHint = _reauthHint[1];
+  var _reauthHint = React.useState(false);
+  var reauthHint = _reauthHint[0];
+  var setReauthHint = _reauthHint[1];
   var pendingWriteRef = React.useRef(null);
 
   // Owner-dashboard saves are loud: if the server doesn't confirm the
   // write, say so immediately instead of letting changes silently
   // vanish on the next refresh.
   function guardedSave(key, value, _retried) {
-    return storageSet(key, value, { admin: true }).then(function (out) {
+    return storageSet(key, value, {
+      admin: true
+    }).then(function (out) {
       if (out.ok) return true;
       if (out.status === 401) {
         // The admin session is dead — this page's token was issued
@@ -182,7 +244,10 @@ function App() {
         // fresh token and the save is then re-applied automatically (see
         // handleGateSuccess), so the edit is never lost and never has to
         // be redone by hand.
-        pendingWriteRef.current = { key: key, value: value };
+        pendingWriteRef.current = {
+          key: key,
+          value: value
+        };
         setReauthHint(true);
         setIsAdmin(false);
         setView("admin-gate");
@@ -192,14 +257,15 @@ function App() {
         // Transient server hiccup (database blip etc.) — one automatic
         // retry before bothering the owner. Never retries 401/400/413.
         return new Promise(function (resolve) {
-          setTimeout(function () { resolve(guardedSave(key, value, true)); }, 900);
+          setTimeout(function () {
+            resolve(guardedSave(key, value, true));
+          }, 900);
         });
       }
       alert("Saving failed — your change was NOT saved (server response " + (out.status || "network error") + ").\n\nCheck your internet connection and try again. If you were logged out of the dashboard, redo the footer entry and apply the change again.");
       return false;
     });
   }
-
   function persistCatalog(updater) {
     // Compute the next catalog synchronously from the state we have right
     // now, then save THAT object. React 18 does not guarantee that a
@@ -235,41 +301,73 @@ function App() {
     setContent(next);
     return guardedSave("voxel-content", next);
   }
-
-  function goHome() { setView("home"); setActiveCategory(null); }
-  function goCategory(cat) { setActiveCategory(cat); setView("category"); }
-  function goCustom() { setView("custom"); }
+  function goHome() {
+    setView("home");
+    setActiveCategory(null);
+  }
+  function goCategory(cat) {
+    setActiveCategory(cat);
+    setView("category");
+  }
+  function goCustom() {
+    setView("custom");
+  }
   function handleFooterTrigger() {
     setView(isAdmin ? "admin" : "admin-gate");
   }
-
   function openCatalogOrder(model) {
-    setOrderPopupItem({ type: "catalog", id: model.id, name: model.name });
+    setOrderPopupItem({
+      type: "catalog",
+      id: model.id,
+      name: model.name
+    });
   }
   function handleCustomOrderNow(data) {
-    setOrderPopupItem({ type: "custom", name: "Custom order", note: data.note, fileName: data.fileName });
+    setOrderPopupItem({
+      type: "custom",
+      name: "Custom order",
+      note: data.note,
+      fileName: data.fileName
+    });
   }
 
   // --- Cart actions ---
-  function openQuickAdd(model) { setQuickAddModel(model); }
-  function closeQuickAdd() { setQuickAddModel(null); }
+  function openQuickAdd(model) {
+    setQuickAddModel(model);
+  }
+  function closeQuickAdd() {
+    setQuickAddModel(null);
+  }
   function showCartToast() {
     setCartToast(true);
     if (toastTimer.current) clearTimeout(toastTimer.current);
-    toastTimer.current = setTimeout(function () { setCartToast(false); }, 2800);
+    toastTimer.current = setTimeout(function () {
+      setCartToast(false);
+    }, 2800);
   }
   function handleAddToCart(model, qty) {
     if (!model) return;
     var addQty = clampQty(qty);
-    setLastAdd({ modelId: model.id, added: addQty });
+    setLastAdd({
+      modelId: model.id,
+      added: addQty
+    });
     setCart(function (prev) {
       var next = prev.slice();
       var hit = null;
       for (var i = 0; i < next.length; i++) {
-        if (next[i].modelId === model.id) { hit = next[i]; break; }
+        if (next[i].modelId === model.id) {
+          hit = next[i];
+          break;
+        }
       }
-      if (hit) hit.qty = Math.min(MAX_CART_QTY, hit.qty + addQty);
-      else next.push({ modelId: model.id, name: model.name, price: String(model.price), image: model.image || "", qty: addQty });
+      if (hit) hit.qty = Math.min(MAX_CART_QTY, hit.qty + addQty);else next.push({
+        modelId: model.id,
+        name: model.name,
+        price: String(model.price),
+        image: model.image || "",
+        qty: addQty
+      });
       return next;
     });
     closeQuickAdd();
@@ -283,9 +381,14 @@ function App() {
     setCart(function (prev) {
       var next = [];
       for (var i = 0; i < prev.length; i++) {
-        if (prev[i].modelId !== target.modelId) { next.push(prev[i]); continue; }
+        if (prev[i].modelId !== target.modelId) {
+          next.push(prev[i]);
+          continue;
+        }
         var rest = prev[i].qty - target.added;
-        if (rest > 0) next.push(Object.assign({}, prev[i], { qty: rest }));
+        if (rest > 0) next.push(Object.assign({}, prev[i], {
+          qty: rest
+        }));
       }
       return next;
     });
@@ -295,9 +398,14 @@ function App() {
       var next = [];
       var changed = false;
       for (var i = 0; i < prev.length; i++) {
-        if (prev[i].modelId !== modelId) { next.push(prev[i]); continue; }
+        if (prev[i].modelId !== modelId) {
+          next.push(prev[i]);
+          continue;
+        }
         var q = prev[i].qty + delta;
-        if (q >= 1) next.push(Object.assign({}, prev[i], { qty: clampQty(q) }));
+        if (q >= 1) next.push(Object.assign({}, prev[i], {
+          qty: clampQty(q)
+        }));
         changed = true;
       }
       if (!changed) return prev;
@@ -305,14 +413,23 @@ function App() {
     });
   }
   function handleCartRemove(modelId) {
-    setCart(function (prev) { return prev.filter(function (it) { return it.modelId !== modelId; }); });
+    setCart(function (prev) {
+      return prev.filter(function (it) {
+        return it.modelId !== modelId;
+      });
+    });
   }
   function handleCartQtyTo(modelId, qty) {
     setCart(function (prev) {
       var next = [];
       for (var i = 0; i < prev.length; i++) {
-        if (prev[i].modelId !== modelId) { next.push(prev[i]); continue; }
-        next.push(Object.assign({}, prev[i], { qty: clampQty(qty) }));
+        if (prev[i].modelId !== modelId) {
+          next.push(prev[i]);
+          continue;
+        }
+        next.push(Object.assign({}, prev[i], {
+          qty: clampQty(qty)
+        }));
       }
       return next;
     });
@@ -324,7 +441,13 @@ function App() {
       // could double up an item that is still lingering in the live cart
       // key (e.g. if the clear raced with a fast redirect to WhatsApp).
       setCart(savedCartOffer.map(function (it) {
-        return { modelId: it.modelId, name: String(it.name || ""), price: String(it.price), image: String(it.image || ""), qty: clampQty(it.qty) };
+        return {
+          modelId: it.modelId,
+          name: String(it.name || ""),
+          price: String(it.price),
+          image: String(it.image || ""),
+          qty: clampQty(it.qty)
+        };
       }));
     }
     clearCartArchive();
@@ -335,12 +458,16 @@ function App() {
       id: makeId("inq"),
       type: "cart",
       label: "Cart order",
-      note: items.map(function (it) { return it.name + " \u00d7 " + it.qty; }).join(", "),
+      note: items.map(function (it) {
+        return it.name + " \u00d7 " + it.qty;
+      }).join(", "),
       fileName: "",
       channel: channel,
-      createdAt: Date.now(),
+      createdAt: Date.now()
     };
-    setInquiries(function (prev) { return [entry].concat(prev); });
+    setInquiries(function (prev) {
+      return [entry].concat(prev);
+    });
     saveInquiryRemote(entry);
     // Discord notification is sent by the SERVER from the sanitized
     // entry — the browser never talks to the webhook path at all.
@@ -355,7 +482,9 @@ function App() {
     checkingOutRef.current = true;
     logCartInquiry(cart, "whatsapp");
     setCartOpen(false);
-    setTimeout(function () { checkingOutRef.current = false; }, 1500);
+    setTimeout(function () {
+      checkingOutRef.current = false;
+    }, 1500);
   }
   function logInquiry(channel) {
     if (!orderPopupItem) return;
@@ -378,20 +507,23 @@ function App() {
       note: orderPopupItem.note || "",
       fileName: orderPopupItem.fileName || "",
       channel: channel,
-      createdAt: Date.now(),
+      createdAt: Date.now()
     };
     // Append through the public endpoint — the server sanitizes,
     // de-duplicates, and caps the list. No pre-read here: the inquiry
     // list is owner-private now, and the server serializes writes so
     // simultaneous customers can't erase each other's entries.
-    setInquiries(function (prev) { return [entry].concat(prev); });
+    setInquiries(function (prev) {
+      return [entry].concat(prev);
+    });
     saveInquiryRemote(entry);
     // Discord notification is sent by the SERVER from the sanitized
     // entry — the browser never talks to the webhook path at all.
   }
-
   function deleteInquiry(id) {
-    var next = inquiries.filter(function (i) { return i && i.id !== id; });
+    var next = inquiries.filter(function (i) {
+      return i && i.id !== id;
+    });
     setInquiries(next);
     return guardedSave("voxel-inquiries", next);
   }
@@ -399,48 +531,90 @@ function App() {
     setInquiries([]);
     return guardedSave("voxel-inquiries", []);
   }
-
   function addCategory(name) {
     return persistCatalog(function (prevCategories, prevModels) {
-      return { categories: prevCategories.concat([{ id: makeId("cat"), name: name }]), models: prevModels };
+      return {
+        categories: prevCategories.concat([{
+          id: makeId("cat"),
+          name: name
+        }]),
+        models: prevModels
+      };
     });
   }
   function renameCategory(id, name) {
     return persistCatalog(function (prevCategories, prevModels) {
-      return { categories: prevCategories.map(function (c) { return c.id === id ? Object.assign({}, c, { name: name }) : c; }), models: prevModels };
+      return {
+        categories: prevCategories.map(function (c) {
+          return c.id === id ? Object.assign({}, c, {
+            name: name
+          }) : c;
+        }),
+        models: prevModels
+      };
     });
   }
   function deleteCategory(id) {
     return persistCatalog(function (prevCategories, prevModels) {
-      return { categories: prevCategories.filter(function (c) { return c.id !== id; }), models: prevModels };
+      return {
+        categories: prevCategories.filter(function (c) {
+          return c.id !== id;
+        }),
+        models: prevModels
+      };
     });
   }
   function addModel(data) {
     return persistCatalog(function (prevCategories, prevModels) {
-      return { categories: prevCategories, models: prevModels.concat([Object.assign({}, data, { id: makeId("model"), createdAt: Date.now() })]) };
+      return {
+        categories: prevCategories,
+        models: prevModels.concat([Object.assign({}, data, {
+          id: makeId("model"),
+          createdAt: Date.now()
+        })])
+      };
     });
   }
   function updateModel(id, data) {
     return persistCatalog(function (prevCategories, prevModels) {
-      return { categories: prevCategories, models: prevModels.map(function (m) { return m.id === id ? Object.assign({}, m, data) : m; }) };
+      return {
+        categories: prevCategories,
+        models: prevModels.map(function (m) {
+          return m.id === id ? Object.assign({}, m, data) : m;
+        })
+      };
     });
   }
   function deleteModel(id) {
     return persistCatalog(function (prevCategories, prevModels) {
-      return { categories: prevCategories, models: prevModels.filter(function (m) { return m.id !== id; }) };
+      return {
+        categories: prevCategories,
+        models: prevModels.filter(function (m) {
+          return m.id !== id;
+        })
+      };
     });
   }
   function toggleFeatured(id) {
     return persistCatalog(function (prevCategories, prevModels) {
-      return { categories: prevCategories, models: prevModels.map(function (m) { return m.id === id ? Object.assign({}, m, { featured: !m.featured }) : m; }) };
+      return {
+        categories: prevCategories,
+        models: prevModels.map(function (m) {
+          return m.id === id ? Object.assign({}, m, {
+            featured: !m.featured
+          }) : m;
+        })
+      };
     });
   }
   function importModels(newModels) {
     return persistCatalog(function (prevCategories, prevModels) {
-      return { categories: prevCategories, models: prevModels.concat(newModels) };
+      return {
+        categories: prevCategories,
+        models: prevModels.concat(newModels)
+      };
     });
   }
-
   function handleGateSuccess() {
     setIsAdmin(true);
     setView("admin");
@@ -460,7 +634,6 @@ function App() {
       guardedSave(pending.key, pending.value);
     }
   }
-
   function handleLogout() {
     // Kill the session server-side too, so a token that got out (this
     // or another tab) can't be replayed anywhere else. Leaving the
@@ -471,111 +644,160 @@ function App() {
     setView("admin-gate");
     setReauthHint(false);
   }
-
   if (loadError) {
-    return (
-      <div className="voxel-root">
-        <div className="max-w-md mx-auto px-6 py-24 text-center">
-          <div className="font-display text-xl" style={{ color: "var(--ink)" }}>Can't reach the shop right now</div>
-          <p className="text-sm mt-3" style={{ color: "var(--ink-dim)" }}>
-            The shop's data couldn't be loaded, so nothing is being shown rather than risk displaying — or overwriting —
-            the real catalog. This is usually a temporary connection problem.
-          </p>
-          <div className="mt-6">
-            <PrimaryButton onClick={function () { window.location.reload(); }}>Try again</PrimaryButton>
-          </div>
-        </div>
-      </div>
-    );
+    return /*#__PURE__*/React.createElement("div", {
+      className: "voxel-root"
+    }, /*#__PURE__*/React.createElement("div", {
+      className: "max-w-md mx-auto px-6 py-24 text-center"
+    }, /*#__PURE__*/React.createElement("div", {
+      className: "font-display text-xl",
+      style: {
+        color: "var(--ink)"
+      }
+    }, "Can't reach the shop right now"), /*#__PURE__*/React.createElement("p", {
+      className: "text-sm mt-3",
+      style: {
+        color: "var(--ink-dim)"
+      }
+    }, "The shop's data couldn't be loaded, so nothing is being shown rather than risk displaying — or overwriting — the real catalog. This is usually a temporary connection problem."), /*#__PURE__*/React.createElement("div", {
+      className: "mt-6"
+    }, /*#__PURE__*/React.createElement(PrimaryButton, {
+      onClick: function () {
+        window.location.reload();
+      }
+    }, "Try again"))));
   }
-
   if (loading) {
-    return <SkeletonScreen />;
+    return /*#__PURE__*/React.createElement(SkeletonScreen, null);
   }
-
   var cartCheckoutUrl = cart.length > 0 ? buildWhatsAppUrl(content.whatsappNumber || content.contactPhone, buildCartMessage(cart, content.currencySymbol)) : null;
-
-  return (
-    <div className="voxel-root">
-      {firstScrolled && getThemeGreeting(content.theme) && greetingShownForRef.current !== content.theme && (
-        <ThemeGreeting theme={content.theme} onDone={function () { greetingShownForRef.current = content.theme; }} />
-      )}
-      <Header content={content} goHome={goHome} goCustom={goCustom} cartCount={cartItemCount(cart)} onCartOpen={function () { setCartOpen(true); }} />
-      <main>
-        {view === "home" && <HomeView content={content} categories={categories} models={models} goCategory={goCategory} goCustom={goCustom} onOrderModel={openCatalogOrder} onViewModel={setViewingModel} onAddToCart={openQuickAdd} />}
-        {view === "category" && activeCategory && <CategoryView content={content} category={activeCategory} models={models} goBack={goHome} onOrderModel={openCatalogOrder} onViewModel={setViewingModel} onAddToCart={openQuickAdd} />}
-        {view === "custom" && <CustomOrderView content={content} goBack={goHome} onOrderNow={handleCustomOrderNow} />}
-        {view === "admin-gate" && <AdminGate security={settings.security || DEFAULT_SECURITY} notice={reauthHint} onSuccess={handleGateSuccess} />}
-        {view === "admin" && isAdmin && (
-          <AdminView tab={adminTab} setTab={setAdminTab} inquiries={inquiries}
-            deleteInquiry={deleteInquiry} clearInquiries={clearInquiries}
-            categories={categories} models={models} addCategory={addCategory} renameCategory={renameCategory} deleteCategory={deleteCategory}
-            addModel={addModel} updateModel={updateModel} deleteModel={deleteModel} toggleFeatured={toggleFeatured} importModels={importModels}
-            settings={settings} updateSettings={persistSettings} content={content} updateContent={persistContent} goHome={goHome} onSignOut={handleLogout} />
-        )}
-      </main>
-      <Footer content={content} security={settings.security || DEFAULT_SECURITY} onTrigger={handleFooterTrigger} />
-
-      {viewingModel && (
-        <ModelDetailPopup
-          content={content}
-          model={viewingModel}
-          onOrder={function () { openCatalogOrder(viewingModel); setViewingModel(null); }}
-          onAddToCart={function () { openQuickAdd(viewingModel); }}
-          onClose={function () { setViewingModel(null); }}
-        />
-      )}
-
-      {orderPopupItem && (
-        <OrderContactPopup
-          content={content}
-          item={orderPopupItem}
-          onLogInquiry={logInquiry}
-          onClose={function () { setOrderPopupItem(null); }}
-        />
-      )}
-
-      {savedCartOffer && savedCartOffer.length && (
-        <RestoreCartPopup
-          items={savedCartOffer}
-          count={cartItemCount(savedCartOffer)}
-          onKeep={function () { handleRestoreSavedCart(true); }}
-          onDiscard={function () { handleRestoreSavedCart(false); }}
-        />
-      )}
-
-      {quickAddModel && (
-        <QuickAddPopup
-          key={quickAddModel.id}
-          model={quickAddModel}
-          content={content}
-          onAdd={handleAddToCart}
-          onClose={closeQuickAdd}
-        />
-      )}
-
-      <CartDrawer
-        open={cartOpen}
-        items={cart}
-        content={content}
-        checkoutUrl={cartCheckoutUrl}
-        onClose={function () { setCartOpen(false); }}
-        onChangeQty={handleCartQty}
-        onChangeQtyTo={handleCartQtyTo}
-        onRemove={handleCartRemove}
-        onCheckout={handleCartCheckout}
-      />
-
-      <CartToast
-        visible={cartToast}
-        label={lastAdd ? (cart.find(function (it) { return it.modelId === lastAdd.modelId; }) || { name: "" }).name : null}
-        onUndo={undoLastAdd}
-        onViewCart={function () { setCartToast(false); setCartOpen(true); }}
-      />
-    </div>
-  );
+  return /*#__PURE__*/React.createElement("div", {
+    className: "voxel-root"
+  }, firstScrolled && getThemeGreeting(content.theme) && greetingShownForRef.current !== content.theme && /*#__PURE__*/React.createElement(ThemeGreeting, {
+    theme: content.theme,
+    onDone: function () {
+      greetingShownForRef.current = content.theme;
+    }
+  }), /*#__PURE__*/React.createElement(Header, {
+    content: content,
+    goHome: goHome,
+    goCustom: goCustom,
+    cartCount: cartItemCount(cart),
+    onCartOpen: function () {
+      setCartOpen(true);
+    }
+  }), /*#__PURE__*/React.createElement("main", null, view === "home" && /*#__PURE__*/React.createElement(HomeView, {
+    content: content,
+    categories: categories,
+    models: models,
+    goCategory: goCategory,
+    goCustom: goCustom,
+    onOrderModel: openCatalogOrder,
+    onViewModel: setViewingModel,
+    onAddToCart: openQuickAdd
+  }), view === "category" && activeCategory && /*#__PURE__*/React.createElement(CategoryView, {
+    content: content,
+    category: activeCategory,
+    models: models,
+    goBack: goHome,
+    onOrderModel: openCatalogOrder,
+    onViewModel: setViewingModel,
+    onAddToCart: openQuickAdd
+  }), view === "custom" && /*#__PURE__*/React.createElement(CustomOrderView, {
+    content: content,
+    goBack: goHome,
+    onOrderNow: handleCustomOrderNow
+  }), view === "admin-gate" && /*#__PURE__*/React.createElement(AdminGate, {
+    security: settings.security || DEFAULT_SECURITY,
+    notice: reauthHint,
+    onSuccess: handleGateSuccess
+  }), view === "admin" && isAdmin && /*#__PURE__*/React.createElement(AdminView, {
+    tab: adminTab,
+    setTab: setAdminTab,
+    inquiries: inquiries,
+    deleteInquiry: deleteInquiry,
+    clearInquiries: clearInquiries,
+    categories: categories,
+    models: models,
+    addCategory: addCategory,
+    renameCategory: renameCategory,
+    deleteCategory: deleteCategory,
+    addModel: addModel,
+    updateModel: updateModel,
+    deleteModel: deleteModel,
+    toggleFeatured: toggleFeatured,
+    importModels: importModels,
+    settings: settings,
+    updateSettings: persistSettings,
+    content: content,
+    updateContent: persistContent,
+    goHome: goHome,
+    onSignOut: handleLogout
+  })), /*#__PURE__*/React.createElement(Footer, {
+    content: content,
+    security: settings.security || DEFAULT_SECURITY,
+    onTrigger: handleFooterTrigger
+  }), viewingModel && /*#__PURE__*/React.createElement(ModelDetailPopup, {
+    content: content,
+    model: viewingModel,
+    onOrder: function () {
+      openCatalogOrder(viewingModel);
+      setViewingModel(null);
+    },
+    onAddToCart: function () {
+      openQuickAdd(viewingModel);
+    },
+    onClose: function () {
+      setViewingModel(null);
+    }
+  }), orderPopupItem && /*#__PURE__*/React.createElement(OrderContactPopup, {
+    content: content,
+    item: orderPopupItem,
+    onLogInquiry: logInquiry,
+    onClose: function () {
+      setOrderPopupItem(null);
+    }
+  }), savedCartOffer && savedCartOffer.length && /*#__PURE__*/React.createElement(RestoreCartPopup, {
+    items: savedCartOffer,
+    count: cartItemCount(savedCartOffer),
+    onKeep: function () {
+      handleRestoreSavedCart(true);
+    },
+    onDiscard: function () {
+      handleRestoreSavedCart(false);
+    }
+  }), quickAddModel && /*#__PURE__*/React.createElement(QuickAddPopup, {
+    key: quickAddModel.id,
+    model: quickAddModel,
+    content: content,
+    onAdd: handleAddToCart,
+    onClose: closeQuickAdd
+  }), /*#__PURE__*/React.createElement(CartDrawer, {
+    open: cartOpen,
+    items: cart,
+    content: content,
+    checkoutUrl: cartCheckoutUrl,
+    onClose: function () {
+      setCartOpen(false);
+    },
+    onChangeQty: handleCartQty,
+    onChangeQtyTo: handleCartQtyTo,
+    onRemove: handleCartRemove,
+    onCheckout: handleCartCheckout
+  }), /*#__PURE__*/React.createElement(CartToast, {
+    visible: cartToast,
+    label: lastAdd ? (cart.find(function (it) {
+      return it.modelId === lastAdd.modelId;
+    }) || {
+      name: ""
+    }).name : null,
+    onUndo: undoLastAdd,
+    onViewCart: function () {
+      setCartToast(false);
+      setCartOpen(true);
+    }
+  }));
 }
-
 var rootEl = document.getElementById("root");
 var root = ReactDOM.createRoot(rootEl);
-root.render(<ErrorBoundary><App /></ErrorBoundary>);
+root.render(/*#__PURE__*/React.createElement(ErrorBoundary, null, /*#__PURE__*/React.createElement(App, null)));

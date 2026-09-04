@@ -1,0 +1,2834 @@
+/* ---------------------------------------------------------
+   Owner entry — hidden footer trigger, then a shape
+   combination, then a passcode. No labels on this screen
+   on purpose. All three steps are editable from inside the
+   dashboard once you are in.
+--------------------------------------------------------- */
+function AdminGate(props) {
+  var sec = props.security || DEFAULT_SECURITY;
+  var _stage = React.useState("combo");
+  var stage = _stage[0];
+  var setStage = _stage[1];
+  var _comboProgress = React.useState([]);
+  var comboProgress = _comboProgress[0];
+  var setComboProgress = _comboProgress[1];
+  var _pw = React.useState("");
+  var pw = _pw[0];
+  var setPw = _pw[1];
+  var _showPw = React.useState(false);
+  var showPw = _showPw[0];
+  var setShowPw = _showPw[1];
+  var _error = React.useState("");
+  var error = _error[0];
+  var setError = _error[1];
+  var _shake = React.useState(false);
+  var shake = _shake[0];
+  var setShake = _shake[1];
+  var _attempts = React.useState(0);
+  var attempts = _attempts[0];
+  var setAttempts = _attempts[1];
+  var _checking = React.useState(false);
+  var checking = _checking[0];
+  var setChecking = _checking[1];
+  var _setupCurrent = React.useState("");
+  var setupCurrent = _setupCurrent[0];
+  var setSetupCurrent = _setupCurrent[1];
+  var _setupNew = React.useState("");
+  var setupNew = _setupNew[0];
+  var setSetupNew = _setupNew[1];
+  var _setupError = React.useState("");
+  var setupError = _setupError[0];
+  var setSetupError = _setupError[1];
+  var _setupChecking = React.useState(false);
+  var setupChecking = _setupChecking[0];
+  var setSetupChecking = _setupChecking[1];
+  var _setupMode = React.useState("fresh");
+  var setupMode = _setupMode[0];
+  var setSetupMode = _setupMode[1];
+  var _gateChecking = React.useState(false);
+  var gateChecking = _gateChecking[0];
+  var setGateChecking = _gateChecking[1];
+  // The verified shape sequence is kept here so it can travel with the
+  // passcode (auth) and the setup handover — the server requires all
+  // three together. It is never displayed and never sent anywhere else.
+  var comboRef = React.useRef(null);
+  // How many shapes to collect comes from the server as a bare count;
+  // the sequence itself is verified server-side via /api/gate.
+  var comboLength = sec && sec.comboLength || sec && sec.combo && sec.combo.length || 4;
+  function pressShape(shape) {
+    if (gateChecking) return;
+    var next = comboProgress.concat([shape]);
+    if (next.length < comboLength) {
+      setComboProgress(next);
+      return;
+    }
+    // Sequence complete — the SERVER decides whether it's right. The
+    // old build matched locally against the shipped combination,
+    // which meant the answer was readable in the page's own data.
+    setComboProgress(next);
+    setGateChecking(true);
+    apiGateCombo(next).then(function (ok) {
+      setGateChecking(false);
+      setComboProgress([]);
+      if (ok) {
+        comboRef.current = next;
+        setError("");
+        setStage("password");
+      } else {
+        setShake(true);
+        setTimeout(function () {
+          setShake(false);
+        }, 350);
+      }
+    });
+  }
+  function submitPassword() {
+    if (checking || !pw) return;
+    setChecking(true);
+    // The server is the single source of truth for the passcode — it
+    // verifies and returns a short-lived admin session token. The hash
+    // is never shipped to browsers, so it can't be brute-forced offline.
+    apiAuthDetailed(pw, comboRef.current).then(function (r) {
+      setChecking(false);
+      if (r && r.token) {
+        setAdminApiToken(r.token);
+        setPw("");
+        props.onSuccess();
+        return;
+      }
+      if (r && r.status === 401 && r.error === "wrong_combo") {
+        // The server rejected the shape sequence — straight back to
+        // the first door, same 3-strikes reset as a wrong passcode.
+        setPw("");
+        setAttempts(0);
+        setStage("combo");
+        setComboProgress([]);
+        setError("");
+        return;
+      }
+      if (r && r.status === 403 && r.error === "setup_required") {
+        // The stored passcode is still the one-time setup code (fresh
+        // install) or the public default (legacy install). Route to the
+        // forced handover screen; tell it which voice to use.
+        setPw("");
+        setAttempts(0);
+        setSetupMode(r.mode === "legacy" ? "legacy" : "fresh");
+        setStage("setup");
+        return;
+      }
+      if (r && r.status === 429) {
+        // Lockout / rate limit (slammed by retries or someone probing
+        // the door). A "wrong passcode" counter here would mislead the
+        // owner into more attempts and dig the lockout deeper. Surface
+        // the server's cooldown and re-arm the button.
+        setPw("");
+        setError(r.retryAfterSec ? "Too many attempts — wait about " + Math.max(1, Math.ceil(r.retryAfterSec / 60)) + " min and try again." : "Too many attempts — wait a minute and try again.");
+        return;
+      }
+      if (r && r.status === 0) {
+        // Request dead-ended — server stalled, is cold-starting, or the
+        // network dropped it. Not a wrong passcode: don't burn an
+        // attempt, don't change the stage.
+        setError("Couldn't reach the server right now — try again in a moment.");
+        return;
+      }
+      var nextAttempts = attempts + 1;
+      setPw("");
+      if (nextAttempts >= 3) {
+        setAttempts(0);
+        setStage("combo");
+        setComboProgress([]);
+        setError("");
+      } else {
+        setAttempts(nextAttempts);
+        setError(nextAttempts + " of 3");
+      }
+    }).catch(function () {
+      // Whatever threw, never leave the button stuck on "Checking…".
+      setChecking(false);
+      setError("Something went wrong — try again in a moment.");
+    });
+  }
+  function submitSetup() {
+    var trimmed = (setupNew || "").trim();
+    if (setupChecking) return;
+    if (!setupCurrent || setupNew.length === 0) {
+      setSetupError("Enter both fields.");
+      return;
+    }
+    if (trimmed.length < 12) {
+      setSetupError("The new passcode must be at least 12 characters.");
+      return;
+    }
+    if (trimmed === setupCurrent) {
+      setSetupError("The new passcode must be different from the setup one.");
+      return;
+    }
+    setSetupChecking(true);
+    setSetupError("");
+    var ctrl = typeof AbortController !== "undefined" ? new AbortController() : null;
+    var timer = ctrl ? setTimeout(function () {
+      ctrl.abort();
+    }, 15000) : null;
+    var clearTimer = function () {
+      if (timer) {
+        clearTimeout(timer);
+        timer = null;
+      }
+    };
+    fetch("/api/auth/change-default", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        current: setupCurrent,
+        newPassword: trimmed,
+        combo: comboRef.current || []
+      }),
+      signal: ctrl ? ctrl.signal : undefined
+    }).then(function (res) {
+      return res.json().catch(function () {
+        return {};
+      }).then(function (json) {
+        return {
+          status: res.status,
+          json: json
+        };
+      });
+    }).then(function (r) {
+      clearTimer();
+      setSetupChecking(false);
+      if (r.json && r.json.token) {
+        setAdminApiToken(r.json.token);
+        setSetupCurrent("");
+        setSetupNew("");
+        props.onSuccess();
+        return;
+      }
+      var msg;
+      if (r.status === 400 && r.json.error === "passcode_too_short") msg = "Make the new passcode at least 12 characters.";else if (r.status === 400 && r.json.error === "default_passcode_not_allowed") msg = "That's the well-known default passcode — please choose your own.";else if (r.status === 400 && r.json.error === "passcode_must_differ") msg = "The new passcode must be different from the setup one.";else if (r.status === 401 && r.json.error === "wrong_passcode") msg = setupMode === "legacy" ? "The current passcode isn't right — try the one that worked before, usually the original starter one." : "The setup passcode isn't right — check the one printed in the server log.";else if (r.status === 429) msg = r.json.retryAfterSec ? "Too many attempts — wait about " + Math.max(1, Math.ceil(r.json.retryAfterSec / 60)) + " min and try again." : "Too many attempts — wait a minute and try again.";else msg = "Couldn't finish setup right now. Reload the page and try the door again.";
+      setSetupError(msg);
+    }).catch(function () {
+      // Timed out (abort), network error, or an unexpected throw — in
+      // every case put the button back instead of stranding it.
+      clearTimer();
+      setSetupChecking(false);
+      setSetupError("Couldn't reach the server (it may be waking up) — try again in a moment.");
+    });
+  }
+  return /*#__PURE__*/React.createElement("div", {
+    className: "max-w-sm mx-auto px-5 py-24 text-center"
+  }, props.notice && /*#__PURE__*/React.createElement("p", {
+    className: "mb-5 text-sm rounded-md px-3 py-2",
+    style: {
+      background: "var(--panel-2)",
+      border: "1px solid var(--line)",
+      color: "var(--ink)"
+    }
+  }, "Your dashboard session expired, so that change wasn't saved. Enter the door again and it will be applied automatically."), /*#__PURE__*/React.createElement(Lock, {
+    size: 26,
+    style: {
+      color: "var(--ink-dim)"
+    },
+    className: "mx-auto"
+  }), stage === "combo" && /*#__PURE__*/React.createElement("div", {
+    className: "mt-8"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "flex items-center justify-center gap-3 flex-wrap" + (shake ? " voxel-shake" : "")
+  }, COMBO_SHAPES.map(function (shape) {
+    return /*#__PURE__*/React.createElement("button", {
+      key: shape,
+      type: "button",
+      "data-shape": shape,
+      onClick: function () {
+        pressShape(shape);
+      },
+      className: "cursor-pointer rounded-md",
+      style: {
+        width: 48,
+        height: 48,
+        background: "var(--panel)",
+        border: "1px solid var(--line)"
+      }
+    }, /*#__PURE__*/React.createElement(ShapeIcon, {
+      shape: shape
+    }));
+  })), /*#__PURE__*/React.createElement("div", {
+    className: "flex items-center justify-center gap-2 mt-5"
+  }, Array.from({
+    length: comboLength
+  }).map(function (_, i) {
+    return /*#__PURE__*/React.createElement("span", {
+      key: i,
+      style: {
+        width: 8,
+        height: 8,
+        borderRadius: "50%",
+        background: i < comboProgress.length ? "var(--brass)" : "var(--line)",
+        display: "inline-block"
+      }
+    });
+  }))), stage === "password" && /*#__PURE__*/React.createElement("div", {
+    className: "mt-8 flex flex-col gap-3"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "flex gap-2"
+  }, /*#__PURE__*/React.createElement("input", {
+    type: showPw ? "text" : "password",
+    value: pw,
+    onChange: function (e) {
+      setPw(e.target.value);
+    },
+    onKeyDown: function (e) {
+      if (e.key === "Enter") submitPassword();
+    },
+    autoComplete: "off",
+    autoCorrect: "off",
+    autoCapitalize: "off",
+    spellCheck: "false",
+    className: "flex-1 px-3.5 py-2.5 rounded-md text-sm text-center",
+    style: {
+      background: "var(--panel)",
+      border: "1px solid var(--line)",
+      color: "var(--ink)"
+    }
+  }), /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: function () {
+      setShowPw(function (s) {
+        return !s;
+      });
+    },
+    "aria-label": "Toggle visibility",
+    className: "cursor-pointer rounded-md flex items-center justify-center",
+    style: {
+      width: 42,
+      background: "var(--panel)",
+      border: "1px solid var(--line)",
+      color: "var(--ink-dim)"
+    }
+  }, showPw ? /*#__PURE__*/React.createElement(EyeOff, {
+    size: 16
+  }) : /*#__PURE__*/React.createElement(Eye, {
+    size: 16
+  }))), error && /*#__PURE__*/React.createElement("div", {
+    className: "text-xs",
+    style: {
+      color: "var(--danger)"
+    }
+  }, error), /*#__PURE__*/React.createElement(PrimaryButton, {
+    onClick: submitPassword,
+    disabled: checking
+  }, checking ? "Checking…" : "Enter")), stage === "setup" && /*#__PURE__*/React.createElement("div", {
+    className: "mt-8 flex flex-col gap-3 text-left"
+  }, setupMode === "legacy" ? /*#__PURE__*/React.createElement("p", {
+    className: "text-sm",
+    style: {
+      color: "var(--ink)"
+    }
+  }, "Your site came with the well-known starter passcode. Before your dashboard is usable, replace it with a hidden passcode only you know.") : /*#__PURE__*/React.createElement("p", {
+    className: "text-sm",
+    style: {
+      color: "var(--ink)"
+    }
+  }, "This is the first time the owner door has opened on this site. Before your dashboard is usable, pick a hidden passcode only you know."), /*#__PURE__*/React.createElement("input", {
+    type: "password",
+    value: setupCurrent,
+    onChange: function (e) {
+      setSetupCurrent(e.target.value);
+    },
+    placeholder: setupMode === "legacy" ? "Current passcode" : "One-time setup passcode",
+    autoComplete: "off",
+    autoCorrect: "off",
+    autoCapitalize: "off",
+    spellCheck: "false",
+    className: "w-full px-3.5 py-2.5 rounded-md text-sm text-center",
+    style: {
+      background: "var(--panel)",
+      border: "1px solid var(--line)",
+      color: "var(--ink)"
+    }
+  }), /*#__PURE__*/React.createElement("input", {
+    type: "password",
+    value: setupNew,
+    onChange: function (e) {
+      setSetupNew(e.target.value);
+    },
+    onKeyDown: function (e) {
+      if (e.key === "Enter") submitSetup();
+    },
+    placeholder: "New passcode — at least 12 characters",
+    autoComplete: "off",
+    autoCorrect: "off",
+    autoCapitalize: "off",
+    spellCheck: "false",
+    className: "w-full px-3.5 py-2.5 rounded-md text-sm text-center",
+    style: {
+      background: "var(--panel)",
+      border: "1px solid var(--line)",
+      color: "var(--ink)"
+    }
+  }), setupMode === "legacy" ? /*#__PURE__*/React.createElement("p", {
+    className: "text-xs",
+    style: {
+      color: "var(--ink-dim)"
+    }
+  }, "\"Current\" is the passcode that worked before — for a site that never changed it, that's the original starter one. You only enter it once.") : /*#__PURE__*/React.createElement("p", {
+    className: "text-xs",
+    style: {
+      color: "var(--ink-dim)"
+    }
+  }, "Tip: the setup passcode is printed once in your server log. Keep the new one somewhere only you can see."), setupError && /*#__PURE__*/React.createElement("div", {
+    className: "text-xs",
+    style: {
+      color: "var(--danger)"
+    }
+  }, setupError), /*#__PURE__*/React.createElement(PrimaryButton, {
+    onClick: submitSetup,
+    disabled: setupChecking
+  }, setupChecking ? "Setting up…" : "Set my passcode")));
+}
+function AdminInquiries(props) {
+  var inquiries = props.inquiries;
+  if (inquiries.length === 0) {
+    return /*#__PURE__*/React.createElement(EmptyState, {
+      icon: ClipboardList,
+      title: "No inquiries yet",
+      body: "When someone taps Order now and messages you, it will show up here."
+    });
+  }
+  return /*#__PURE__*/React.createElement("div", {
+    className: "flex flex-col gap-3"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "flex items-center justify-between"
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "text-xs font-mono-ac",
+    style: {
+      color: "var(--ink-dim)"
+    }
+  }, inquiries.length + " " + (inquiries.length === 1 ? "inquiry" : "inquiries") + " — newest first"), /*#__PURE__*/React.createElement(SecondaryButton, {
+    onClick: function () {
+      if (window.confirm("Clear ALL " + inquiries.length + " inquiries? This can't be undone — copy any order details you still need first.")) {
+        props.onClear();
+      }
+    }
+  }, "Clear all")), inquiries.map(function (i) {
+    return /*#__PURE__*/React.createElement("div", {
+      key: i.id,
+      className: "p-4 rounded-lg",
+      style: {
+        background: "var(--panel)",
+        border: "1px solid var(--line)"
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      className: "flex items-start justify-between gap-3"
+    }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+      className: "font-display text-base",
+      style: {
+        color: "var(--ink)"
+      }
+    }, i.label), i.note && /*#__PURE__*/React.createElement("div", {
+      className: "text-sm mt-1",
+      style: {
+        color: "var(--ink)"
+      }
+    }, i.note), i.fileName && /*#__PURE__*/React.createElement("div", {
+      className: "text-xs mt-1 font-mono-ac",
+      style: {
+        color: "var(--ink-dim)"
+      }
+    }, "File mentioned: ", i.fileName), /*#__PURE__*/React.createElement("div", {
+      className: "text-xs mt-2",
+      style: {
+        color: "var(--ink-dim)"
+      }
+    }, "via ", i.channel === "whatsapp" ? "WhatsApp" : "Instagram", " · ", formatDate(i.createdAt))), /*#__PURE__*/React.createElement("div", {
+      className: "flex flex-col items-end gap-2 flex-shrink-0"
+    }, /*#__PURE__*/React.createElement("span", {
+      className: "text-xs px-2.5 py-1 rounded-full font-mono-ac uppercase",
+      style: {
+        background: i.channel === "whatsapp" ? "var(--teal-soft)" : "var(--brass-soft)",
+        color: i.channel === "whatsapp" ? "var(--teal)" : "var(--brass-text)"
+      }
+    }, i.type === "custom" ? "custom" : i.type === "cart" ? "cart" : "catalog"), /*#__PURE__*/React.createElement("button", {
+      onClick: function () {
+        if (window.confirm("Delete this inquiry?")) props.onDelete(i.id);
+      },
+      "aria-label": "Delete inquiry",
+      className: "text-xs cursor-pointer border-0 bg-transparent",
+      style: {
+        color: "var(--danger)",
+        textDecoration: "underline"
+      }
+    }, "Delete"))));
+  }));
+}
+function ModelForm(props) {
+  var model = props.model;
+  var categories = props.categories;
+  var content = props.content;
+  var _name = React.useState(model.name || "");
+  var name = _name[0];
+  var setName = _name[1];
+  var _description = React.useState(model.description || "");
+  var description = _description[0];
+  var setDescription = _description[1];
+  var _price = React.useState(model.price || "");
+  var price = _price[0];
+  var setPrice = _price[1];
+  var _grams = React.useState(model.grams || "");
+  var grams = _grams[0];
+  var setGrams = _grams[1];
+  var _printHours = React.useState(model.printHours || "");
+  var printHours = _printHours[0];
+  var setPrintHours = _printHours[1];
+  var _printMinutes = React.useState(model.printMinutes || "");
+  var printMinutes = _printMinutes[0];
+  var setPrintMinutes = _printMinutes[1];
+  var _categoryId = React.useState(model.categoryId || (categories[0] ? categories[0].id : ""));
+  var categoryId = _categoryId[0];
+  var setCategoryId = _categoryId[1];
+  var _image = React.useState(model.image || "");
+  var image = _image[0];
+  var setImage = _image[1];
+  var _featured = React.useState(!!model.featured);
+  var featured = _featured[0];
+  var setFeatured = _featured[1];
+  var _uploading = React.useState(false);
+  var uploading = _uploading[0];
+  var setUploading = _uploading[1];
+  var _sourceUrl = React.useState("");
+  var sourceUrl = _sourceUrl[0];
+  var setSourceUrl = _sourceUrl[1];
+  var _fetching = React.useState(false);
+  var fetching = _fetching[0];
+  var setFetching = _fetching[1];
+  var _fetchError = React.useState("");
+  var fetchError = _fetchError[0];
+  var setFetchError = _fetchError[1];
+  var _fetchedOk = React.useState(false);
+  var fetchedOk = _fetchedOk[0];
+  var setFetchedOk = _fetchedOk[1];
+
+  // Pulls the page's Open Graph tags (title, description, cover image) via
+  // Microlink's free public API and drops them straight into the form.
+  function handleFetchFromLink() {
+    var url = sourceUrl.trim();
+    if (!url) {
+      setFetchError("Paste a link first.");
+      return;
+    }
+    setFetching(true);
+    setFetchError("");
+    setFetchedOk(false);
+    fetch("https://api.microlink.io/?url=" + encodeURIComponent(url)).then(function (res) {
+      if (!res.ok) throw new Error("request failed");
+      return res.json();
+    }).then(function (json) {
+      if (json.status !== "success" || !json.data) throw new Error("no data");
+      var d = json.data;
+      var gotAnything = false;
+      if (d.image && d.image.url) {
+        setImage(d.image.url);
+        gotAnything = true;
+      }
+      if (!gotAnything) throw new Error("empty");
+      setFetchedOk(true);
+    }).catch(function () {
+      setFetchError("Could not read that link — paste the details in by hand instead.");
+    }).finally(function () {
+      setFetching(false);
+    });
+  }
+  var pricing = props.settings && props.settings.pricing || DEFAULT_SETTINGS.pricing;
+  function handleWeightOrTimeChange(nextGrams, nextHours, nextMinutes) {
+    var calculated = calculatePrintPriceUSD(nextGrams, nextHours, nextMinutes, pricing);
+    if (calculated !== null) setPrice(calculated.toFixed(2));
+  }
+  function handleImage(e) {
+    var f = e.target.files && e.target.files[0];
+    if (!f) return;
+    setUploading(true);
+    compressImage(f).then(function (dataUrl) {
+      setImage(dataUrl);
+      setUploading(false);
+    }).catch(function () {
+      setUploading(false);
+    });
+  }
+  function handleSave() {
+    if (!name.trim()) return;
+    props.onSave({
+      id: model.id,
+      name: name.trim(),
+      description: description.trim(),
+      price: price,
+      categoryId: categoryId,
+      image: image,
+      featured: featured,
+      grams: grams,
+      printHours: printHours,
+      printMinutes: printMinutes
+    });
+  }
+  return /*#__PURE__*/React.createElement("div", {
+    className: "p-5 rounded-lg mb-4 flex flex-col gap-4",
+    style: {
+      background: "var(--panel-2)",
+      border: "1px solid var(--line)"
+    }
+  }, /*#__PURE__*/React.createElement("label", {
+    className: "flex flex-col gap-1.5 text-sm",
+    style: {
+      color: "var(--ink)"
+    }
+  }, "Paste a link to pull in its photo (MakerWorld, Printables, etc.)", /*#__PURE__*/React.createElement("div", {
+    className: "flex gap-2"
+  }, /*#__PURE__*/React.createElement("input", {
+    value: sourceUrl,
+    onChange: function (e) {
+      setSourceUrl(e.target.value);
+    },
+    onKeyDown: function (e) {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        handleFetchFromLink();
+      }
+    },
+    placeholder: "https://makerworld.com/en/models/...",
+    className: "flex-1 px-3 py-2 rounded-md text-sm",
+    style: {
+      background: "var(--panel)",
+      border: "1px solid var(--line)",
+      color: "var(--ink)"
+    }
+  }), /*#__PURE__*/React.createElement(SecondaryButton, {
+    onClick: handleFetchFromLink,
+    icon: LinkIcon,
+    disabled: fetching || !sourceUrl.trim()
+  }, fetching ? "Fetching…" : "Fetch from link"))), fetchError && /*#__PURE__*/React.createElement("span", {
+    className: "text-xs",
+    style: {
+      color: "var(--danger)"
+    }
+  }, fetchError), fetchedOk && !fetchError && /*#__PURE__*/React.createElement("span", {
+    className: "text-xs",
+    style: {
+      color: "var(--teal)"
+    }
+  }, "Photo filled in below — write the name, description, and price yourself."), /*#__PURE__*/React.createElement("div", {
+    className: "grid grid-cols-1 sm:grid-cols-2 gap-4"
+  }, /*#__PURE__*/React.createElement("label", {
+    className: "flex flex-col gap-1.5 text-sm",
+    style: {
+      color: "var(--ink)"
+    }
+  }, "Name", /*#__PURE__*/React.createElement("input", {
+    value: name,
+    onChange: function (e) {
+      setName(e.target.value);
+    },
+    className: "px-3 py-2 rounded-md text-sm",
+    style: {
+      background: "var(--panel)",
+      border: "1px solid var(--line)",
+      color: "var(--ink)"
+    }
+  })), /*#__PURE__*/React.createElement("label", {
+    className: "flex flex-col gap-1.5 text-sm",
+    style: {
+      color: "var(--ink)"
+    }
+  }, "Category", /*#__PURE__*/React.createElement("select", {
+    value: categoryId,
+    onChange: function (e) {
+      setCategoryId(e.target.value);
+    },
+    className: "px-3 py-2 rounded-md text-sm",
+    style: {
+      background: "var(--panel)",
+      border: "1px solid var(--line)",
+      color: "var(--ink)"
+    }
+  }, categories.map(function (c) {
+    return /*#__PURE__*/React.createElement("option", {
+      key: c.id,
+      value: c.id
+    }, c.name);
+  })))), /*#__PURE__*/React.createElement("label", {
+    className: "flex flex-col gap-1.5 text-sm",
+    style: {
+      color: "var(--ink)"
+    }
+  }, "Description (optional)", /*#__PURE__*/React.createElement("textarea", {
+    value: description,
+    onChange: function (e) {
+      setDescription(e.target.value);
+    },
+    rows: 2,
+    className: "px-3 py-2 rounded-md text-sm resize-none",
+    style: {
+      background: "var(--panel)",
+      border: "1px solid var(--line)",
+      color: "var(--ink)"
+    }
+  })), /*#__PURE__*/React.createElement("div", {
+    className: "grid grid-cols-1 sm:grid-cols-3 gap-4"
+  }, /*#__PURE__*/React.createElement("label", {
+    className: "flex flex-col gap-1.5 text-sm",
+    style: {
+      color: "var(--ink)"
+    }
+  }, "Filament weight (g)", /*#__PURE__*/React.createElement("input", {
+    type: "number",
+    min: 0,
+    step: "1",
+    value: grams,
+    onChange: function (e) {
+      var v = e.target.value;
+      setGrams(v);
+      handleWeightOrTimeChange(v, printHours, printMinutes);
+    },
+    className: "px-3 py-2 rounded-md text-sm",
+    style: {
+      background: "var(--panel)",
+      border: "1px solid var(--line)",
+      color: "var(--ink)"
+    }
+  })), /*#__PURE__*/React.createElement("label", {
+    className: "flex flex-col gap-1.5 text-sm",
+    style: {
+      color: "var(--ink)"
+    }
+  }, "Print hours", /*#__PURE__*/React.createElement("input", {
+    type: "number",
+    min: 0,
+    step: "1",
+    value: printHours,
+    onChange: function (e) {
+      var v = e.target.value;
+      setPrintHours(v);
+      handleWeightOrTimeChange(grams, v, printMinutes);
+    },
+    className: "px-3 py-2 rounded-md text-sm",
+    style: {
+      background: "var(--panel)",
+      border: "1px solid var(--line)",
+      color: "var(--ink)"
+    }
+  })), /*#__PURE__*/React.createElement("label", {
+    className: "flex flex-col gap-1.5 text-sm",
+    style: {
+      color: "var(--ink)"
+    }
+  }, "Print minutes", /*#__PURE__*/React.createElement("input", {
+    type: "number",
+    min: 0,
+    max: 59,
+    step: "1",
+    value: printMinutes,
+    onChange: function (e) {
+      var v = e.target.value;
+      setPrintMinutes(v);
+      handleWeightOrTimeChange(grams, printHours, v);
+    },
+    className: "px-3 py-2 rounded-md text-sm",
+    style: {
+      background: "var(--panel)",
+      border: "1px solid var(--line)",
+      color: "var(--ink)"
+    }
+  }))), /*#__PURE__*/React.createElement("p", {
+    className: "text-xs -mt-2",
+    style: {
+      color: "var(--ink-dim)"
+    }
+  }, "Fill these in from your slicer and the price below fills itself in — priced as PLA, using the rates set in Settings. Still fully editable if you want to round it or adjust it by hand."), /*#__PURE__*/React.createElement("div", {
+    className: "grid grid-cols-1 sm:grid-cols-2 gap-4"
+  }, /*#__PURE__*/React.createElement("label", {
+    className: "flex flex-col gap-1.5 text-sm",
+    style: {
+      color: "var(--ink)"
+    }
+  }, "Price (", content.currencySymbol, ") — optional", /*#__PURE__*/React.createElement("input", {
+    type: "number",
+    step: "0.01",
+    value: price,
+    onChange: function (e) {
+      setPrice(e.target.value);
+    },
+    className: "px-3 py-2 rounded-md text-sm",
+    style: {
+      background: "var(--panel)",
+      border: "1px solid var(--line)",
+      color: "var(--ink)"
+    }
+  })), /*#__PURE__*/React.createElement("label", {
+    className: "flex flex-col gap-1.5 text-sm",
+    style: {
+      color: "var(--ink)"
+    }
+  }, "Photo", /*#__PURE__*/React.createElement("input", {
+    type: "file",
+    accept: "image/*",
+    onChange: handleImage,
+    className: "text-sm",
+    style: {
+      color: "var(--ink-dim)"
+    }
+  }))), uploading && /*#__PURE__*/React.createElement("span", {
+    className: "text-xs",
+    style: {
+      color: "var(--ink-dim)"
+    }
+  }, "Preparing photo…"), image && /*#__PURE__*/React.createElement("img", {
+    src: image,
+    alt: "Preview",
+    style: {
+      width: 80,
+      height: 80,
+      objectFit: "cover",
+      borderRadius: 8
+    }
+  }), /*#__PURE__*/React.createElement("label", {
+    className: "flex items-center gap-2 text-sm cursor-pointer",
+    style: {
+      color: "var(--ink)"
+    }
+  }, /*#__PURE__*/React.createElement("input", {
+    type: "checkbox",
+    checked: featured,
+    onChange: function (e) {
+      setFeatured(e.target.checked);
+    }
+  }), "Show in Featured on the home page"), /*#__PURE__*/React.createElement("div", {
+    className: "flex gap-3"
+  }, /*#__PURE__*/React.createElement(PrimaryButton, {
+    onClick: handleSave
+  }, model.id ? "Save changes" : "Add model"), /*#__PURE__*/React.createElement(SecondaryButton, {
+    onClick: props.onCancel
+  }, "Cancel")));
+}
+function AdminCatalog(props) {
+  var categories = props.categories;
+  var models = props.models;
+  var content = props.content;
+  var _newCatName = React.useState("");
+  var newCatName = _newCatName[0];
+  var setNewCatName = _newCatName[1];
+  var _editingCatId = React.useState(null);
+  var editingCatId = _editingCatId[0];
+  var setEditingCatId = _editingCatId[1];
+  var _editingCatName = React.useState("");
+  var editingCatName = _editingCatName[0];
+  var setEditingCatName = _editingCatName[1];
+  var _filterCat = React.useState(categories[0] ? categories[0].id : "");
+  var filterCat = _filterCat[0];
+  var setFilterCat = _filterCat[1];
+  var _editingModel = React.useState(null);
+  var editingModel = _editingModel[0];
+  var setEditingModel = _editingModel[1];
+  var _showImport = React.useState(false);
+  var showImport = _showImport[0];
+  var setShowImport = _showImport[1];
+  var _jsonText = React.useState("");
+  var jsonText = _jsonText[0];
+  var setJsonText = _jsonText[1];
+  var _importing = React.useState(false);
+  var importing = _importing[0];
+  var setImporting = _importing[1];
+  var _importError = React.useState("");
+  var importError = _importError[0];
+  var setImportError = _importError[1];
+  var _importSummary = React.useState("");
+  var importSummary = _importSummary[0];
+  var setImportSummary = _importSummary[1];
+  var _showTvSearch = React.useState(false);
+  var showTvSearch = _showTvSearch[0];
+  var setShowTvSearch = _showTvSearch[1];
+  var _tvTerm = React.useState("");
+  var tvTerm = _tvTerm[0];
+  var setTvTerm = _tvTerm[1];
+  var _tvCount = React.useState(30);
+  var tvCount = _tvCount[0];
+  var setTvCount = _tvCount[1];
+  var _tvSearching = React.useState(false);
+  var tvSearching = _tvSearching[0];
+  var setTvSearching = _tvSearching[1];
+  var _tvError = React.useState("");
+  var tvError = _tvError[0];
+  var setTvError = _tvError[1];
+  var _tvSummary = React.useState("");
+  var tvSummary = _tvSummary[0];
+  var setTvSummary = _tvSummary[1];
+  React.useEffect(function () {
+    if (categories.length === 0) {
+      if (filterCat !== "") setFilterCat("");
+      return;
+    }
+    if (!categories.some(function (c) {
+      return c.id === filterCat;
+    })) {
+      setFilterCat(categories[0].id);
+    }
+  }, [categories, filterCat]);
+  function renameCategoryLocal(id, name) {
+    props.renameCategory(id, name);
+  }
+  function handleDeleteCategory(id) {
+    if (models.some(function (m) {
+      return m.categoryId === id;
+    })) {
+      alert("Move or delete this category's models first.");
+      return;
+    }
+    var cat = categories.find(function (c) {
+      return c.id === id;
+    });
+    if (!window.confirm("Delete \"" + (cat ? cat.name : "this category") + "\"? This can't be undone.")) return;
+    props.deleteCategory(id);
+  }
+  function handleDeleteModel(id) {
+    var m = models.find(function (x) {
+      return x.id === id;
+    });
+    if (!window.confirm("Delete \"" + (m ? m.name : "this design") + "\"? This can't be undone.")) return;
+    props.deleteModel(id);
+  }
+
+  // Turns the JSON array from the bulk-collection tool into real
+  // catalog models. Each embedded photo is re-compressed on the way
+  // in, since raw collected photos can be a few hundred KB each.
+  function handleImport() {
+    setImportError("");
+    setImportSummary("");
+    var parsed;
+    try {
+      parsed = JSON.parse(jsonText);
+    } catch (e) {
+      setImportError("That doesn't look like valid JSON — copy the whole thing and paste it here.");
+      return;
+    }
+    if (!Array.isArray(parsed)) {
+      setImportError("Expected a list of models (a JSON array) — check what you copied.");
+      return;
+    }
+    if (parsed.length === 0) {
+      setImportError("That list is empty — nothing to import.");
+      return;
+    }
+    setImporting(true);
+    var validCategoryIds = {};
+    categories.forEach(function (c) {
+      validCategoryIds[c.id] = true;
+    });
+    // Skip anything whose id is already in the catalog (re-pasting the
+    // same collected batch) or appears twice inside one paste — both
+    // used to create confusing duplicate models.
+    var existingIds = {};
+    models.forEach(function (m) {
+      existingIds[m.id] = true;
+    });
+    var batchIds = {};
+    var toAdd = [];
+    var skippedErrors = 0;
+    var skippedNoCategory = 0;
+    var skippedDuplicates = 0;
+    var entries = parsed.slice();
+    function processNext() {
+      if (entries.length === 0) {
+        finishImport();
+        return;
+      }
+      var entry = entries.shift();
+      if (!entry || entry.error || !entry.name) {
+        skippedErrors += 1;
+        processNext();
+        return;
+      }
+      if (entry.id && (existingIds[entry.id] || batchIds[entry.id])) {
+        skippedDuplicates += 1;
+        processNext();
+        return;
+      }
+      if (entry.id) batchIds[entry.id] = true;
+      var categoryId = entry.categoryId;
+      if (!validCategoryIds[categoryId]) {
+        if (validCategoryIds[filterCat]) {
+          categoryId = filterCat;
+        } else {
+          skippedNoCategory += 1;
+          processNext();
+          return;
+        }
+      }
+      compressDataUrl(entry.image || "").then(function (compressedImage) {
+        var pricing = props.settings && props.settings.pricing || DEFAULT_SETTINGS.pricing;
+        var priceToUse = entry.price || "";
+        if (!priceToUse) {
+          var calculated = calculatePrintPriceUSD(entry.grams, entry.printHours, entry.printMinutes, pricing);
+          if (calculated !== null) priceToUse = calculated.toFixed(2);
+        }
+        toAdd.push({
+          id: entry.id || makeId("model"),
+          name: String(entry.name).trim(),
+          description: (entry.description || "").trim(),
+          price: priceToUse,
+          categoryId: categoryId,
+          image: compressedImage,
+          featured: !!entry.featured,
+          grams: entry.grams || "",
+          printHours: entry.printHours || "",
+          printMinutes: entry.printMinutes || "",
+          createdAt: entry.createdAt || Date.now()
+        });
+        processNext();
+      });
+    }
+    function finishImport() {
+      var proceed = toAdd.length > 0 ? props.importModels(toAdd) : Promise.resolve();
+      proceed.then(function () {
+        setImporting(false);
+        setJsonText("");
+        var parts = ["Imported " + toAdd.length + " model" + (toAdd.length === 1 ? "" : "s") + "."];
+        if (skippedDuplicates > 0) parts.push(skippedDuplicates + " skipped (already in your catalog).");
+        if (skippedErrors > 0) parts.push(skippedErrors + " skipped (fetch errors or missing name).");
+        if (skippedNoCategory > 0) parts.push(skippedNoCategory + " skipped (unrecognized category).");
+        setImportSummary(parts.join(" "));
+      });
+    }
+    processNext();
+  }
+
+  // Searches Thingiverse for the typed keyword and drops the results
+  // straight into the Bulk Import box above, so they go through the
+  // exact same review-then-import step as anything pasted in by hand
+  // — nothing gets added to the live catalog without that click.
+  function handleThingiverseSearch() {
+    if (!tvTerm.trim()) return;
+    setTvSearching(true);
+    setTvError("");
+    setTvSummary("");
+    var url = "/api/thingiverse-search?q=" + encodeURIComponent(tvTerm.trim()) + "&limit=" + encodeURIComponent(tvCount);
+    fetch(url, {
+      headers: {
+        "x-voxel-token": getAdminApiToken() || ""
+      }
+    }).then(function (r) {
+      return r.json().then(function (body) {
+        return {
+          ok: r.ok,
+          body: body
+        };
+      });
+    }).then(function (res) {
+      setTvSearching(false);
+      if (!res.ok) {
+        setTvError(res.body && res.body.error ? res.body.error : "Search failed — try again.");
+        return;
+      }
+      var results = res.body.results || [];
+      if (results.length === 0) {
+        setTvError("No commercially-licensed results found for \"" + tvTerm.trim() + "\". Try a different search term.");
+        return;
+      }
+      setJsonText(JSON.stringify(results, null, 2));
+      setShowImport(true);
+      var parts = ["Found " + results.length + " model" + (results.length === 1 ? "" : "s") + " with a commercial-use license."];
+      if (res.body.skippedLicense) parts.push(res.body.skippedLicense + " skipped (license doesn't allow commercial use, or wasn't specified).");
+      parts.push("Review below, then click \"Import models.\"");
+      setTvSummary(parts.join(" "));
+    }).catch(function () {
+      setTvSearching(false);
+      setTvError("Couldn't reach the search — check your connection and try again.");
+    });
+  }
+  return /*#__PURE__*/React.createElement("div", {
+    className: "flex flex-col gap-12"
+  }, /*#__PURE__*/React.createElement("section", null, /*#__PURE__*/React.createElement("h3", {
+    className: "font-display text-lg mb-4",
+    style: {
+      color: "var(--ink)"
+    }
+  }, "Categories"), /*#__PURE__*/React.createElement("div", {
+    className: "flex flex-col gap-2 mb-4"
+  }, categories.map(function (c) {
+    return /*#__PURE__*/React.createElement("div", {
+      key: c.id,
+      className: "flex items-center gap-3 p-3 rounded-md",
+      style: {
+        background: "var(--panel)",
+        border: "1px solid var(--line)"
+      }
+    }, editingCatId === c.id ? /*#__PURE__*/React.createElement("input", {
+      value: editingCatName,
+      onChange: function (e) {
+        setEditingCatName(e.target.value);
+      },
+      onKeyDown: function (e) {
+        if (e.key === "Enter") {
+          renameCategoryLocal(c.id, editingCatName);
+          setEditingCatId(null);
+        }
+      },
+      className: "flex-1 px-2 py-1.5 rounded text-sm",
+      style: {
+        background: "var(--panel-2)",
+        border: "1px solid var(--line)",
+        color: "var(--ink)"
+      }
+    }) : /*#__PURE__*/React.createElement("span", {
+      className: "flex-1 text-sm",
+      style: {
+        color: "var(--ink)"
+      }
+    }, c.name), /*#__PURE__*/React.createElement("span", {
+      className: "text-xs font-mono-ac",
+      style: {
+        color: "var(--ink-dim)"
+      }
+    }, models.filter(function (m) {
+      return m.categoryId === c.id;
+    }).length, " designs"), editingCatId === c.id ? /*#__PURE__*/React.createElement("button", {
+      onClick: function () {
+        renameCategoryLocal(c.id, editingCatName);
+        setEditingCatId(null);
+      },
+      className: "cursor-pointer border-0 bg-transparent",
+      style: {
+        color: "var(--brass-text)"
+      }
+    }, /*#__PURE__*/React.createElement(CheckCircle2, {
+      size: 16
+    })) : /*#__PURE__*/React.createElement("button", {
+      onClick: function () {
+        setEditingCatId(c.id);
+        setEditingCatName(c.name);
+      },
+      className: "cursor-pointer border-0 bg-transparent",
+      style: {
+        color: "var(--ink-dim)"
+      }
+    }, /*#__PURE__*/React.createElement(Pencil, {
+      size: 15
+    })), /*#__PURE__*/React.createElement("button", {
+      onClick: function () {
+        handleDeleteCategory(c.id);
+      },
+      className: "cursor-pointer border-0 bg-transparent",
+      style: {
+        color: "var(--danger)"
+      }
+    }, /*#__PURE__*/React.createElement(Trash2, {
+      size: 15
+    })));
+  })), /*#__PURE__*/React.createElement("div", {
+    className: "flex gap-2"
+  }, /*#__PURE__*/React.createElement("input", {
+    value: newCatName,
+    onChange: function (e) {
+      setNewCatName(e.target.value);
+    },
+    placeholder: "New category name",
+    className: "flex-1 px-3.5 py-2.5 rounded-md text-sm",
+    style: {
+      background: "var(--panel)",
+      border: "1px solid var(--line)",
+      color: "var(--ink)"
+    }
+  }), /*#__PURE__*/React.createElement(PrimaryButton, {
+    icon: Plus,
+    onClick: function () {
+      if (newCatName.trim()) {
+        props.addCategory(newCatName.trim());
+        setNewCatName("");
+      }
+    }
+  }, "Add"))), /*#__PURE__*/React.createElement("section", null, /*#__PURE__*/React.createElement("div", {
+    className: "flex items-center justify-between mb-2"
+  }, /*#__PURE__*/React.createElement("h3", {
+    className: "font-display text-lg",
+    style: {
+      color: "var(--ink)"
+    }
+  }, "Search Thingiverse"), /*#__PURE__*/React.createElement(SecondaryButton, {
+    onClick: function () {
+      setShowTvSearch(function (s) {
+        return !s;
+      });
+    }
+  }, showTvSearch ? "Hide" : "Search by keyword")), showTvSearch && /*#__PURE__*/React.createElement("div", {
+    className: "p-4 rounded-md flex flex-col gap-3",
+    style: {
+      background: "var(--panel-2)",
+      border: "1px solid var(--line)"
+    }
+  }, /*#__PURE__*/React.createElement("p", {
+    className: "text-sm",
+    style: {
+      color: "var(--ink-dim)"
+    }
+  }, "Search Thingiverse by keyword and pull in the most popular results at once, instead of adding links one by one. Only results whose license allows commercial use are kept — this is a best-effort filter, not legal advice, so it's still worth a quick look before selling prints of anything. Each imported design's description automatically credits the original designer and links back to it."), /*#__PURE__*/React.createElement("div", {
+    className: "flex flex-col sm:flex-row gap-2"
+  }, /*#__PURE__*/React.createElement("input", {
+    value: tvTerm,
+    onChange: function (e) {
+      setTvTerm(e.target.value);
+    },
+    onKeyDown: function (e) {
+      if (e.key === "Enter" && !tvSearching) handleThingiverseSearch();
+    },
+    placeholder: "e.g. toys and fidgets",
+    className: "flex-1 px-3.5 py-2.5 rounded-md text-sm",
+    style: {
+      background: "var(--panel)",
+      border: "1px solid var(--line)",
+      color: "var(--ink)"
+    }
+  }), /*#__PURE__*/React.createElement("select", {
+    value: tvCount,
+    onChange: function (e) {
+      setTvCount(Number(e.target.value));
+    },
+    className: "px-3 py-2.5 rounded-md text-sm",
+    style: {
+      background: "var(--panel)",
+      border: "1px solid var(--line)",
+      color: "var(--ink)"
+    }
+  }, /*#__PURE__*/React.createElement("option", {
+    value: 15
+  }, "15 results"), /*#__PURE__*/React.createElement("option", {
+    value: 30
+  }, "30 results"), /*#__PURE__*/React.createElement("option", {
+    value: 60
+  }, "60 results")), /*#__PURE__*/React.createElement(PrimaryButton, {
+    onClick: handleThingiverseSearch,
+    disabled: tvSearching || !tvTerm.trim()
+  }, tvSearching ? "Searching…" : "Search")), tvError && /*#__PURE__*/React.createElement("span", {
+    className: "text-xs",
+    style: {
+      color: "var(--danger)"
+    }
+  }, tvError), tvSummary && !tvError && /*#__PURE__*/React.createElement("span", {
+    className: "text-xs",
+    style: {
+      color: "var(--teal)"
+    }
+  }, tvSummary))), /*#__PURE__*/React.createElement("section", null, /*#__PURE__*/React.createElement("div", {
+    className: "flex items-center justify-between mb-2"
+  }, /*#__PURE__*/React.createElement("h3", {
+    className: "font-display text-lg",
+    style: {
+      color: "var(--ink)"
+    }
+  }, "Bulk import"), /*#__PURE__*/React.createElement(SecondaryButton, {
+    onClick: function () {
+      setShowImport(function (s) {
+        return !s;
+      });
+    }
+  }, showImport ? "Hide" : "Import from JSON")), showImport && /*#__PURE__*/React.createElement("div", {
+    className: "p-4 rounded-md flex flex-col gap-3",
+    style: {
+      background: "var(--panel-2)",
+      border: "1px solid var(--line)"
+    }
+  }, /*#__PURE__*/React.createElement("p", {
+    className: "text-sm",
+    style: {
+      color: "var(--ink-dim)"
+    }
+  }, "Paste your collected list of designs here. Anything with no recognized category lands in \"", (categories.find(function (c) {
+    return c.id === filterCat;
+  }) || {}).name || "the selected", "\" category below."), /*#__PURE__*/React.createElement("textarea", {
+    value: jsonText,
+    onChange: function (e) {
+      setJsonText(e.target.value);
+    },
+    rows: 4,
+    placeholder: "[{\"name\": \"...\", \"image\": \"data:image/...\", \"categoryId\": \"cat-...\"}]",
+    className: "px-3 py-2 rounded-md text-xs font-mono-ac resize-none",
+    style: {
+      background: "var(--panel)",
+      border: "1px solid var(--line)",
+      color: "var(--ink)"
+    }
+  }), importError && /*#__PURE__*/React.createElement("span", {
+    className: "text-xs",
+    style: {
+      color: "var(--danger)"
+    }
+  }, importError), importSummary && !importError && /*#__PURE__*/React.createElement("span", {
+    className: "text-xs",
+    style: {
+      color: "var(--teal)"
+    }
+  }, importSummary), /*#__PURE__*/React.createElement("div", {
+    className: "flex gap-2"
+  }, /*#__PURE__*/React.createElement(PrimaryButton, {
+    onClick: handleImport,
+    disabled: importing || !jsonText.trim()
+  }, importing ? "Importing…" : "Import models"), /*#__PURE__*/React.createElement(SecondaryButton, {
+    onClick: function () {
+      setJsonText("");
+      setImportError("");
+      setImportSummary("");
+    },
+    disabled: importing
+  }, "Clear")))), /*#__PURE__*/React.createElement("section", null, /*#__PURE__*/React.createElement("div", {
+    className: "flex items-center justify-between mb-4 flex-wrap gap-3"
+  }, /*#__PURE__*/React.createElement("h3", {
+    className: "font-display text-lg",
+    style: {
+      color: "var(--ink)"
+    }
+  }, "Models"), /*#__PURE__*/React.createElement("div", {
+    className: "flex items-center gap-3"
+  }, /*#__PURE__*/React.createElement("select", {
+    value: filterCat,
+    onChange: function (e) {
+      setFilterCat(e.target.value);
+    },
+    className: "px-3 py-2 rounded-md text-sm",
+    style: {
+      background: "var(--panel)",
+      border: "1px solid var(--line)",
+      color: "var(--ink)"
+    }
+  }, categories.map(function (c) {
+    return /*#__PURE__*/React.createElement("option", {
+      key: c.id,
+      value: c.id
+    }, c.name);
+  })), /*#__PURE__*/React.createElement(PrimaryButton, {
+    icon: Plus,
+    disabled: categories.length === 0,
+    onClick: function () {
+      setEditingModel({
+        categoryId: filterCat
+      });
+    }
+  }, "Add model"))), categories.length === 0 && /*#__PURE__*/React.createElement("p", {
+    className: "text-sm mb-4",
+    style: {
+      color: "var(--ink-dim)"
+    }
+  }, "Add a category above first — models need somewhere to live."), editingModel && /*#__PURE__*/React.createElement(ModelForm, {
+    model: editingModel,
+    categories: categories,
+    content: content,
+    settings: props.settings,
+    onCancel: function () {
+      setEditingModel(null);
+    },
+    onSave: function (data) {
+      if (data.id) {
+        props.updateModel(data.id, data);
+      } else {
+        props.addModel(data);
+      }
+      setEditingModel(null);
+    }
+  }), /*#__PURE__*/React.createElement("div", {
+    className: "flex flex-col gap-3 mt-4"
+  }, models.filter(function (m) {
+    return m.categoryId === filterCat;
+  }).length === 0 && /*#__PURE__*/React.createElement("p", {
+    className: "text-sm",
+    style: {
+      color: "var(--ink-dim)"
+    }
+  }, "Nothing added to this category yet."), models.filter(function (m) {
+    return m.categoryId === filterCat;
+  }).map(function (m) {
+    return /*#__PURE__*/React.createElement("div", {
+      key: m.id,
+      className: "flex items-center gap-4 p-3 rounded-md",
+      style: {
+        background: "var(--panel)",
+        border: "1px solid var(--line)"
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      className: "flex items-center justify-center rounded",
+      style: {
+        width: 48,
+        height: 48,
+        background: "var(--panel-2)",
+        flexShrink: 0
+      }
+    }, m.image ? /*#__PURE__*/React.createElement("img", {
+      src: m.image,
+      alt: "",
+      style: {
+        width: "100%",
+        height: "100%",
+        objectFit: "cover",
+        borderRadius: 6
+      }
+    }) : /*#__PURE__*/React.createElement(ImageIcon, {
+      size: 16,
+      style: {
+        color: "var(--ink-dim)"
+      }
+    })), /*#__PURE__*/React.createElement("div", {
+      className: "flex-1"
+    }, /*#__PURE__*/React.createElement("div", {
+      className: "text-sm",
+      style: {
+        color: "var(--ink)"
+      }
+    }, m.name), /*#__PURE__*/React.createElement("div", {
+      className: "text-xs font-mono-ac",
+      style: {
+        color: "var(--ink-dim)"
+      }
+    }, m.price ? formatPriceDisplay(m.price, content) : "No price set")), /*#__PURE__*/React.createElement("button", {
+      onClick: function () {
+        props.toggleFeatured(m.id);
+      },
+      className: "voxel-star-btn cursor-pointer border-0 bg-transparent",
+      style: {
+        color: m.featured ? "var(--brass-text)" : "var(--ink-dim)"
+      }
+    }, /*#__PURE__*/React.createElement(Star, {
+      size: 17,
+      fill: m.featured ? "var(--brass-text)" : "none"
+    })), /*#__PURE__*/React.createElement("button", {
+      onClick: function () {
+        setEditingModel(m);
+      },
+      className: "cursor-pointer border-0 bg-transparent",
+      style: {
+        color: "var(--ink-dim)"
+      }
+    }, /*#__PURE__*/React.createElement(Pencil, {
+      size: 15
+    })), /*#__PURE__*/React.createElement("button", {
+      onClick: function () {
+        handleDeleteModel(m.id);
+      },
+      className: "cursor-pointer border-0 bg-transparent",
+      style: {
+        color: "var(--danger)"
+      }
+    }, /*#__PURE__*/React.createElement(Trash2, {
+      size: 15
+    })));
+  }))));
+}
+
+// Module-level so its identity is stable across renders — inputs keep
+// focus while typing. Reads/writes the shared content draft via props.
+function ContentField(props) {
+  var draft = props.draft;
+  var set = props.set;
+  var field = props.field;
+  return /*#__PURE__*/React.createElement("label", {
+    className: "flex flex-col gap-1.5 text-sm",
+    style: {
+      color: "var(--ink)"
+    }
+  }, props.label, props.area ? /*#__PURE__*/React.createElement("textarea", {
+    value: draft[field],
+    onChange: function (e) {
+      set(field, e.target.value);
+    },
+    rows: 2,
+    placeholder: props.placeholder,
+    className: "px-3 py-2 rounded-md text-sm resize-none",
+    style: {
+      background: "var(--panel)",
+      border: "1px solid var(--line)",
+      color: "var(--ink)"
+    }
+  }) : /*#__PURE__*/React.createElement("input", {
+    value: draft[field],
+    onChange: function (e) {
+      set(field, e.target.value);
+    },
+    placeholder: props.placeholder,
+    className: "px-3 py-2 rounded-md text-sm",
+    style: {
+      background: "var(--panel)",
+      border: "1px solid var(--line)",
+      color: "var(--ink)"
+    }
+  }));
+}
+function AdminContent(props) {
+  var content = props.content;
+  var _draft = React.useState(content);
+  var draft = _draft[0];
+  var setDraft = _draft[1];
+  var _uploading = React.useState(false);
+  var uploading = _uploading[0];
+  var setUploading = _uploading[1];
+  var _savedMsg = React.useState("");
+  var savedMsg = _savedMsg[0];
+  var setSavedMsg = _savedMsg[1];
+  function set(field, value) {
+    setDraft(function (d) {
+      var next = Object.assign({}, d);
+      next[field] = value;
+      return next;
+    });
+  }
+  function handleLogo(e) {
+    var f = e.target.files && e.target.files[0];
+    if (!f) return;
+    setUploading(true);
+    compressImage(f, {
+      preserveAlpha: true
+    }).then(function (dataUrl) {
+      set("logoImage", dataUrl);
+      setUploading(false);
+    }).catch(function () {
+      setUploading(false);
+    });
+  }
+  function handleSave() {
+    props.updateContent(draft).then(function (ok) {
+      if (ok) {
+        setSavedMsg("Saved — your site is updated for every visitor.");
+        setTimeout(function () {
+          setSavedMsg("");
+        }, 3000);
+      }
+    });
+  }
+
+  // Field is defined OUTSIDE AdminContent on purpose: a component
+  // recreated inside render gets a new identity every keystroke, React
+  // remounts every input, and typing loses focus after one character.
+  return /*#__PURE__*/React.createElement("div", {
+    className: "flex flex-col gap-10 max-w-2xl"
+  }, /*#__PURE__*/React.createElement("p", {
+    className: "text-sm",
+    style: {
+      color: "var(--ink-dim)"
+    }
+  }, "Everything below is yours to rewrite. Nothing changes for visitors until you press \"Save and publish\" at the bottom."), /*#__PURE__*/React.createElement("section", null, /*#__PURE__*/React.createElement("h3", {
+    className: "font-display text-lg mb-2",
+    style: {
+      color: "var(--ink)"
+    }
+  }, "Seasonal look"), /*#__PURE__*/React.createElement("p", {
+    className: "text-sm mb-4",
+    style: {
+      color: "var(--ink-dim)"
+    }
+  }, "Dress the site for the moment — Christmas, Ramadan, Eid and more. Each look only changes the colors; the layout, your catalog, and everything else stay exactly as they are. Switch back to Default at any time."), /*#__PURE__*/React.createElement("div", {
+    className: "grid grid-cols-1 sm:grid-cols-2 gap-3"
+  }, SITE_THEMES.map(function (t) {
+    var selected = (draft.theme || "default") === t.id;
+    return /*#__PURE__*/React.createElement("button", {
+      key: t.id,
+      type: "button",
+      onClick: function () {
+        set("theme", t.id);
+      },
+      "aria-pressed": selected,
+      className: "text-left p-3 rounded-lg cursor-pointer border-0",
+      style: {
+        background: selected ? "var(--brass-soft)" : "var(--panel)",
+        border: selected ? "2px solid var(--brass)" : "1px solid var(--line)"
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      className: "flex items-center justify-between gap-2"
+    }, /*#__PURE__*/React.createElement("div", {
+      className: "font-display text-sm",
+      style: {
+        color: "var(--ink)"
+      }
+    }, t.label), /*#__PURE__*/React.createElement("div", {
+      className: "flex items-center gap-1 flex-shrink-0"
+    }, [t.canvas, t.accent, t.second].map(function (col, i) {
+      return /*#__PURE__*/React.createElement("span", {
+        key: i,
+        style: {
+          width: 14,
+          height: 14,
+          borderRadius: "50%",
+          background: col,
+          border: "1px solid var(--line)",
+          display: "inline-block"
+        }
+      });
+    }))), /*#__PURE__*/React.createElement("div", {
+      className: "text-xs mt-1",
+      style: {
+        color: "var(--ink-dim)"
+      }
+    }, t.desc));
+  }))), /*#__PURE__*/React.createElement("section", null, /*#__PURE__*/React.createElement("h3", {
+    className: "font-display text-lg mb-4",
+    style: {
+      color: "var(--ink)"
+    }
+  }, "Identity"), /*#__PURE__*/React.createElement("div", {
+    className: "flex flex-col gap-4"
+  }, /*#__PURE__*/React.createElement(ContentField, {
+    draft: draft,
+    set: set,
+    label: "Business name",
+    field: "businessName"
+  }), /*#__PURE__*/React.createElement(ContentField, {
+    draft: draft,
+    set: set,
+    label: "Currency symbol",
+    field: "currencySymbol"
+  }), /*#__PURE__*/React.createElement("label", {
+    className: "flex flex-col gap-1.5 text-sm",
+    style: {
+      color: "var(--ink)"
+    }
+  }, "Logo (replaces the default mark next to your name)", /*#__PURE__*/React.createElement("input", {
+    type: "file",
+    accept: "image/*",
+    onChange: handleLogo,
+    className: "text-sm",
+    style: {
+      color: "var(--ink-dim)"
+    }
+  })), uploading && /*#__PURE__*/React.createElement("span", {
+    className: "text-xs",
+    style: {
+      color: "var(--ink-dim)"
+    }
+  }, "Preparing logo…"), draft.logoImage && /*#__PURE__*/React.createElement("div", {
+    className: "flex items-center gap-3"
+  }, /*#__PURE__*/React.createElement("img", {
+    src: draft.logoImage,
+    alt: "Logo preview",
+    style: {
+      height: 40
+    }
+  }), /*#__PURE__*/React.createElement("button", {
+    onClick: function () {
+      set("logoImage", "");
+    },
+    className: "text-xs cursor-pointer border-0 bg-transparent",
+    style: {
+      color: "var(--danger)"
+    }
+  }, "Remove logo")))), /*#__PURE__*/React.createElement("section", null, /*#__PURE__*/React.createElement("h3", {
+    className: "font-display text-lg mb-4",
+    style: {
+      color: "var(--ink)"
+    }
+  }, "Order via"), /*#__PURE__*/React.createElement("p", {
+    className: "text-sm mb-3",
+    style: {
+      color: "var(--ink-dim)"
+    }
+  }, "When someone taps \"Order now\", they will be able to message you directly on whichever of these you fill in."), /*#__PURE__*/React.createElement("div", {
+    className: "flex flex-col gap-4"
+  }, /*#__PURE__*/React.createElement(ContentField, {
+    draft: draft,
+    set: set,
+    label: "WhatsApp number (digits only, with country code — e.g. 9613123456, no plus or spaces)",
+    field: "whatsappNumber",
+    placeholder: "9613123456"
+  }), /*#__PURE__*/React.createElement(ContentField, {
+    draft: draft,
+    set: set,
+    label: "Instagram username (no @)",
+    field: "instagramHandle",
+    placeholder: "yourbusiness"
+  }))), /*#__PURE__*/React.createElement("section", null, /*#__PURE__*/React.createElement("h3", {
+    className: "font-display text-lg mb-4",
+    style: {
+      color: "var(--ink)"
+    }
+  }, "Social links (shown in the footer)"), /*#__PURE__*/React.createElement("p", {
+    className: "text-sm mb-3",
+    style: {
+      color: "var(--ink-dim)"
+    }
+  }, "Fill in any of these and a link appears in the footer — tapping it opens that app directly (or its website if the app isn't installed). Your WhatsApp number and Instagram username above are reused here too, so you don't need to enter those twice."), /*#__PURE__*/React.createElement("div", {
+    className: "grid grid-cols-1 sm:grid-cols-2 gap-4"
+  }, /*#__PURE__*/React.createElement(ContentField, {
+    draft: draft,
+    set: set,
+    label: "TikTok username (no @)",
+    field: "tiktokHandle",
+    placeholder: "yourbusiness"
+  }), /*#__PURE__*/React.createElement(ContentField, {
+    draft: draft,
+    set: set,
+    label: "Facebook username or page name",
+    field: "facebookHandle",
+    placeholder: "yourbusiness"
+  }))), /*#__PURE__*/React.createElement("section", null, /*#__PURE__*/React.createElement("h3", {
+    className: "font-display text-lg mb-4",
+    style: {
+      color: "var(--ink)"
+    }
+  }, "Contact information (shown on the site)"), /*#__PURE__*/React.createElement("div", {
+    className: "grid grid-cols-1 sm:grid-cols-2 gap-4"
+  }, /*#__PURE__*/React.createElement(ContentField, {
+    draft: draft,
+    set: set,
+    label: "Phone",
+    field: "contactPhone",
+    placeholder: "+961 ..."
+  }), /*#__PURE__*/React.createElement(ContentField, {
+    draft: draft,
+    set: set,
+    label: "Email",
+    field: "contactEmail",
+    placeholder: "you@example.com"
+  }))), /*#__PURE__*/React.createElement("section", null, /*#__PURE__*/React.createElement("h3", {
+    className: "font-display text-lg mb-4",
+    style: {
+      color: "var(--ink)"
+    }
+  }, "Home page"), /*#__PURE__*/React.createElement("div", {
+    className: "flex flex-col gap-4"
+  }, /*#__PURE__*/React.createElement(ContentField, {
+    draft: draft,
+    set: set,
+    label: "Eyebrow (small line above the headline, after your business name)",
+    field: "heroEyebrow"
+  }), /*#__PURE__*/React.createElement(ContentField, {
+    draft: draft,
+    set: set,
+    label: "Headline — line 1",
+    field: "heroHeadlineLine1"
+  }), /*#__PURE__*/React.createElement(ContentField, {
+    draft: draft,
+    set: set,
+    label: "Headline — line 2",
+    field: "heroHeadlineLine2"
+  }), /*#__PURE__*/React.createElement(ContentField, {
+    draft: draft,
+    set: set,
+    label: "Subtext",
+    field: "heroSubtext",
+    area: true
+  }), /*#__PURE__*/React.createElement(ContentField, {
+    draft: draft,
+    set: set,
+    label: "Featured section label",
+    field: "featuredEyebrow"
+  }), /*#__PURE__*/React.createElement(ContentField, {
+    draft: draft,
+    set: set,
+    label: "Categories section label",
+    field: "categoriesEyebrow"
+  }))), /*#__PURE__*/React.createElement("section", null, /*#__PURE__*/React.createElement("h3", {
+    className: "font-display text-lg mb-4",
+    style: {
+      color: "var(--ink)"
+    }
+  }, "Custom-order card (on the home page)"), /*#__PURE__*/React.createElement("div", {
+    className: "flex flex-col gap-4"
+  }, /*#__PURE__*/React.createElement(ContentField, {
+    draft: draft,
+    set: set,
+    label: "Heading",
+    field: "customCtaHeading"
+  }), /*#__PURE__*/React.createElement(ContentField, {
+    draft: draft,
+    set: set,
+    label: "Body",
+    field: "customCtaBody",
+    area: true
+  }), /*#__PURE__*/React.createElement(ContentField, {
+    draft: draft,
+    set: set,
+    label: "Button text",
+    field: "customCtaButton"
+  }))), /*#__PURE__*/React.createElement("section", null, /*#__PURE__*/React.createElement("h3", {
+    className: "font-display text-lg mb-4",
+    style: {
+      color: "var(--ink)"
+    }
+  }, "Custom order page"), /*#__PURE__*/React.createElement("div", {
+    className: "flex flex-col gap-4"
+  }, /*#__PURE__*/React.createElement(ContentField, {
+    draft: draft,
+    set: set,
+    label: "Heading",
+    field: "customPageHeading"
+  }), /*#__PURE__*/React.createElement(ContentField, {
+    draft: draft,
+    set: set,
+    label: "Subtext",
+    field: "customPageSubtext",
+    area: true
+  }))), /*#__PURE__*/React.createElement("section", null, /*#__PURE__*/React.createElement("h3", {
+    className: "font-display text-lg mb-4",
+    style: {
+      color: "var(--ink)"
+    }
+  }, "How ordering works (under the hero)"), /*#__PURE__*/React.createElement("label", {
+    className: "flex items-center gap-2 text-sm cursor-pointer mb-3",
+    style: {
+      color: "var(--ink)"
+    }
+  }, /*#__PURE__*/React.createElement("input", {
+    type: "checkbox",
+    checked: !!draft.showHowItWorks,
+    onChange: function (e) {
+      set("showHowItWorks", e.target.checked);
+    }
+  }), "Show the three-step strip on the home page"), /*#__PURE__*/React.createElement("div", {
+    className: "flex flex-col gap-4"
+  }, /*#__PURE__*/React.createElement(ContentField, {
+    draft: draft,
+    set: set,
+    label: "Section label",
+    field: "howItWorksEyebrow"
+  }), /*#__PURE__*/React.createElement("div", {
+    className: "grid grid-cols-1 sm:grid-cols-3 gap-4"
+  }, /*#__PURE__*/React.createElement(ContentField, {
+    draft: draft,
+    set: set,
+    label: "Step 1 — title",
+    field: "howItWorksStep1Title"
+  }), /*#__PURE__*/React.createElement(ContentField, {
+    draft: draft,
+    set: set,
+    label: "Step 2 — title",
+    field: "howItWorksStep2Title"
+  }), /*#__PURE__*/React.createElement(ContentField, {
+    draft: draft,
+    set: set,
+    label: "Step 3 — title",
+    field: "howItWorksStep3Title"
+  })), /*#__PURE__*/React.createElement("div", {
+    className: "grid grid-cols-1 sm:grid-cols-3 gap-4"
+  }, /*#__PURE__*/React.createElement(ContentField, {
+    draft: draft,
+    set: set,
+    label: "Step 1 — description (hover text)",
+    field: "howItWorksStep1Body",
+    area: true
+  }), /*#__PURE__*/React.createElement(ContentField, {
+    draft: draft,
+    set: set,
+    label: "Step 2 — description (hover text)",
+    field: "howItWorksStep2Body",
+    area: true
+  }), /*#__PURE__*/React.createElement(ContentField, {
+    draft: draft,
+    set: set,
+    label: "Step 3 — description (hover text)",
+    field: "howItWorksStep3Body",
+    area: true
+  })))), /*#__PURE__*/React.createElement("section", null, /*#__PURE__*/React.createElement("h3", {
+    className: "font-display text-lg mb-4",
+    style: {
+      color: "var(--ink)"
+    }
+  }, "Catalog badges"), /*#__PURE__*/React.createElement("label", {
+    className: "flex items-center gap-2 text-sm cursor-pointer mb-3",
+    style: {
+      color: "var(--ink)"
+    }
+  }, /*#__PURE__*/React.createElement("input", {
+    type: "checkbox",
+    checked: !!draft.showNewBadge,
+    onChange: function (e) {
+      set("showNewBadge", e.target.checked);
+    }
+  }), "Mark recently added designs with a brass NEW badge"), draft.showNewBadge !== false && /*#__PURE__*/React.createElement(ContentField, {
+    draft: draft,
+    set: set,
+    label: "Keep showing NEW for this many days after a design is added",
+    field: "newBadgeDays"
+  })), /*#__PURE__*/React.createElement("section", null, /*#__PURE__*/React.createElement("h3", {
+    className: "font-display text-lg mb-4",
+    style: {
+      color: "var(--ink)"
+    }
+  }, "Empty category message"), /*#__PURE__*/React.createElement("div", {
+    className: "flex flex-col gap-4"
+  }, /*#__PURE__*/React.createElement(ContentField, {
+    draft: draft,
+    set: set,
+    label: "Title",
+    field: "emptyCategoryTitle"
+  }), /*#__PURE__*/React.createElement(ContentField, {
+    draft: draft,
+    set: set,
+    label: "Body",
+    field: "emptyCategoryBody",
+    area: true
+  }))), /*#__PURE__*/React.createElement("section", null, /*#__PURE__*/React.createElement("h3", {
+    className: "font-display text-lg mb-4",
+    style: {
+      color: "var(--ink)"
+    }
+  }, "Footer"), /*#__PURE__*/React.createElement(ContentField, {
+    draft: draft,
+    set: set,
+    label: "Tagline (shown right after your business name)",
+    field: "footerTagline"
+  })), /*#__PURE__*/React.createElement("section", null, /*#__PURE__*/React.createElement("h3", {
+    className: "font-display text-lg mb-4",
+    style: {
+      color: "var(--ink)"
+    }
+  }, "Pricing display"), /*#__PURE__*/React.createElement("label", {
+    className: "flex items-center gap-2 text-sm cursor-pointer mb-3",
+    style: {
+      color: "var(--ink)"
+    }
+  }, /*#__PURE__*/React.createElement("input", {
+    type: "checkbox",
+    checked: draft.showLbpConversion,
+    onChange: function (e) {
+      set("showLbpConversion", e.target.checked);
+    }
+  }), "Also show prices converted to Lebanese Lira"), draft.showLbpConversion && /*#__PURE__*/React.createElement(ContentField, {
+    draft: draft,
+    set: set,
+    label: "Exchange rate (LBP per $1)",
+    field: "lbpExchangeRate"
+  })), savedMsg && /*#__PURE__*/React.createElement("p", {
+    className: "text-sm",
+    style: {
+      color: "var(--teal)"
+    }
+  }, savedMsg), /*#__PURE__*/React.createElement(PrimaryButton, {
+    onClick: handleSave
+  }, "Save and publish"));
+}
+
+/* ---------------------------------------------------------
+   Prints wall manager — photos of completed orders that scroll
+   across the home page. Nothing appears on the public site until
+   at least one photo is saved here, so an empty shop shows no
+   empty section.
+--------------------------------------------------------- */
+function AdminPrintsWall(props) {
+  var content = props.content;
+  var _draft = React.useState(content);
+  var draft = _draft[0];
+  var setDraft = _draft[1];
+  var _uploadingCount = React.useState(0);
+  var uploadingCount = _uploadingCount[0];
+  var setUploadingCount = _uploadingCount[1];
+  var _savedMsg = React.useState("");
+  var savedMsg = _savedMsg[0];
+  var setSavedMsg = _savedMsg[1];
+  var prints = draft.recentPrints || [];
+  function set(field, value) {
+    setDraft(function (d) {
+      var next = Object.assign({}, d);
+      next[field] = value;
+      return next;
+    });
+  }
+  function patchPrint(id, patch) {
+    setDraft(function (d) {
+      var next = Object.assign({}, d);
+      next.recentPrints = (d.recentPrints || []).map(function (p) {
+        return p.id === id ? Object.assign({}, p, patch) : p;
+      });
+      return next;
+    });
+  }
+  function movePrint(id, dir) {
+    setDraft(function (d) {
+      var list = (d.recentPrints || []).slice();
+      var i = list.findIndex(function (p) {
+        return p.id === id;
+      });
+      var j = i + dir;
+      if (i === -1 || j < 0 || j >= list.length) return d;
+      var tmp = list[i];
+      list[i] = list[j];
+      list[j] = tmp;
+      var next = Object.assign({}, d);
+      next.recentPrints = list;
+      return next;
+    });
+  }
+  function removePrint(id) {
+    setDraft(function (d) {
+      var next = Object.assign({}, d);
+      next.recentPrints = (d.recentPrints || []).filter(function (p) {
+        return p.id !== id;
+      });
+      return next;
+    });
+  }
+
+  // Photos are compressed one at a time (same pipeline as catalog
+  // photos) — a whole batch at once would spike memory on phones.
+  function handleFiles(e) {
+    var input = e.target;
+    var files = Array.prototype.slice.call(input && input.files || []);
+    input.value = "";
+    if (!files.length) return;
+    var room = RECENT_PRINTS_MAX - prints.length;
+    if (room <= 0) {
+      alert("The prints wall holds up to " + RECENT_PRINTS_MAX + " photos — remove one first.");
+      return;
+    }
+    var accepted = files.slice(0, room);
+    if (accepted.length < files.length) {
+      alert("Only the first " + accepted.length + " photo" + (accepted.length === 1 ? " was" : "s were") + " added — the wall holds up to " + RECENT_PRINTS_MAX + ".");
+    }
+    setUploadingCount(accepted.length);
+    function processNext() {
+      if (!accepted.length) {
+        setUploadingCount(0);
+        return;
+      }
+      var f = accepted.shift();
+      compressImage(f).then(function (dataUrl) {
+        setDraft(function (d) {
+          return Object.assign({}, d, {
+            recentPrints: (d.recentPrints || []).concat([{
+              id: makeId("print"),
+              image: dataUrl,
+              caption: ""
+            }])
+          });
+        });
+        processNext();
+      }).catch(function () {
+        processNext();
+      });
+    }
+    processNext();
+  }
+  function handleSave() {
+    // Drop anything without a photo and normalize the numbers before
+    // the content document is written for every visitor.
+    var cleaned = prints.filter(function (p) {
+      return p && p.image;
+    }).slice(0, RECENT_PRINTS_MAX).map(function (p) {
+      return {
+        id: p.id,
+        image: p.image,
+        caption: (p.caption || "").trim()
+      };
+    });
+    var next = Object.assign({}, draft, {
+      recentPrints: cleaned,
+      recentPrintsSpeed: String(Math.min(15, Math.max(1, Number(draft.recentPrintsSpeed) || 2.6)))
+    });
+    props.updateContent(next).then(function (ok) {
+      if (ok) {
+        setSavedMsg("Saved — the home page is updated for every visitor.");
+        setTimeout(function () {
+          setSavedMsg("");
+        }, 3000);
+      }
+    });
+  }
+  return /*#__PURE__*/React.createElement("div", {
+    className: "flex flex-col gap-10 max-w-2xl"
+  }, /*#__PURE__*/React.createElement("p", {
+    className: "text-sm",
+    style: {
+      color: "var(--ink-dim)"
+    }
+  }, "Real photos of finished orders, scrolling across the home page. Proof of work converts better than anything decorative — the wall only appears once the first photo is saved below."), /*#__PURE__*/React.createElement("section", null, /*#__PURE__*/React.createElement("h3", {
+    className: "font-display text-lg mb-4",
+    style: {
+      color: "var(--ink)"
+    }
+  }, "Display"), /*#__PURE__*/React.createElement("div", {
+    className: "flex flex-col gap-4"
+  }, /*#__PURE__*/React.createElement("label", {
+    className: "flex items-center gap-2 text-sm cursor-pointer",
+    style: {
+      color: "var(--ink)"
+    }
+  }, /*#__PURE__*/React.createElement("input", {
+    type: "checkbox",
+    checked: !!draft.showRecentPrints,
+    onChange: function (e) {
+      set("showRecentPrints", e.target.checked);
+    }
+  }), "Show the prints wall on the home page"), /*#__PURE__*/React.createElement(ContentField, {
+    draft: draft,
+    set: set,
+    label: "Section label",
+    field: "recentPrintsEyebrow"
+  }), /*#__PURE__*/React.createElement(ContentField, {
+    draft: draft,
+    set: set,
+    label: "Scroll pace — seconds each photo takes to pass (bigger = slower)",
+    field: "recentPrintsSpeed"
+  }))), /*#__PURE__*/React.createElement("section", null, /*#__PURE__*/React.createElement("h3", {
+    className: "font-display text-lg mb-4",
+    style: {
+      color: "var(--ink)"
+    }
+  }, "Photos"), /*#__PURE__*/React.createElement("label", {
+    className: "flex flex-col gap-1.5 text-sm",
+    style: {
+      color: "var(--ink)"
+    }
+  }, "Add photos (you can pick several at once)", /*#__PURE__*/React.createElement("input", {
+    type: "file",
+    accept: "image/*",
+    multiple: true,
+    onChange: handleFiles,
+    className: "text-sm",
+    style: {
+      color: "var(--ink-dim)"
+    }
+  }), /*#__PURE__*/React.createElement("span", {
+    className: "text-xs",
+    style: {
+      color: "var(--ink-dim)"
+    }
+  }, "Up to ", RECENT_PRINTS_MAX, " photos, compressed automatically like catalog photos. Captions are optional — one short line works best (\"Dragon helmet, printed in silk bronze\").")), uploadingCount > 0 && /*#__PURE__*/React.createElement("span", {
+    className: "text-xs mt-2",
+    style: {
+      color: "var(--ink-dim)"
+    }
+  }, "Preparing ", uploadingCount, " photo", uploadingCount === 1 ? "" : "s", "…"), prints.length === 0 ? /*#__PURE__*/React.createElement("div", {
+    className: "mt-4"
+  }, /*#__PURE__*/React.createElement(EmptyState, {
+    icon: ImageIcon,
+    title: "No photos yet",
+    body: "Upload your first completed print above — the wall appears on the home page as soon as this is saved."
+  })) : /*#__PURE__*/React.createElement("div", {
+    className: "grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4"
+  }, prints.map(function (p, i) {
+    return /*#__PURE__*/React.createElement("div", {
+      key: p.id,
+      className: "p-3 rounded-md flex gap-3",
+      style: {
+        background: "var(--panel)",
+        border: "1px solid var(--line)"
+      }
+    }, /*#__PURE__*/React.createElement("img", {
+      src: p.image,
+      alt: "",
+      style: {
+        width: 72,
+        height: 72,
+        objectFit: "cover",
+        borderRadius: 8,
+        flexShrink: 0
+      }
+    }), /*#__PURE__*/React.createElement("div", {
+      className: "flex flex-col gap-2 flex-1",
+      style: {
+        minWidth: 0
+      }
+    }, /*#__PURE__*/React.createElement("input", {
+      value: p.caption || "",
+      onChange: function (e) {
+        patchPrint(p.id, {
+          caption: e.target.value
+        });
+      },
+      placeholder: "Caption (optional)",
+      className: "px-3 py-2 rounded-md text-sm w-full",
+      style: {
+        background: "var(--panel-2)",
+        border: "1px solid var(--line)",
+        color: "var(--ink)"
+      }
+    }), /*#__PURE__*/React.createElement("div", {
+      className: "flex items-center gap-1"
+    }, /*#__PURE__*/React.createElement("button", {
+      onClick: function () {
+        movePrint(p.id, -1);
+      },
+      disabled: i === 0,
+      "aria-label": "Move earlier",
+      className: "cursor-pointer border-0 bg-transparent",
+      style: {
+        color: i === 0 ? "var(--line)" : "var(--ink-dim)"
+      }
+    }, /*#__PURE__*/React.createElement(ChevronUp, {
+      size: 15
+    })), /*#__PURE__*/React.createElement("button", {
+      onClick: function () {
+        movePrint(p.id, 1);
+      },
+      disabled: i === prints.length - 1,
+      "aria-label": "Move later",
+      className: "cursor-pointer border-0 bg-transparent",
+      style: {
+        color: i === prints.length - 1 ? "var(--line)" : "var(--ink-dim)"
+      }
+    }, /*#__PURE__*/React.createElement(ChevronDown, {
+      size: 15
+    })), /*#__PURE__*/React.createElement("span", {
+      className: "text-xs font-mono-ac",
+      style: {
+        color: "var(--ink-dim)",
+        marginLeft: 4
+      }
+    }, i + 1), /*#__PURE__*/React.createElement("button", {
+      onClick: function () {
+        removePrint(p.id);
+      },
+      "aria-label": "Remove photo",
+      className: "cursor-pointer border-0 bg-transparent",
+      style: {
+        color: "var(--danger)",
+        marginLeft: "auto"
+      }
+    }, /*#__PURE__*/React.createElement(Trash2, {
+      size: 15
+    })))));
+  }))), savedMsg && /*#__PURE__*/React.createElement("p", {
+    className: "text-sm",
+    style: {
+      color: "var(--teal)"
+    }
+  }, savedMsg), /*#__PURE__*/React.createElement(PrimaryButton, {
+    onClick: handleSave
+  }, "Save and publish"));
+}
+function AdminSettings(props) {
+  var settings = props.settings;
+  var security = settings.security || DEFAULT_SECURITY;
+  var pricing = settings.pricing || DEFAULT_SETTINGS.pricing;
+  var _webhookUrl = React.useState(settings.webhookUrl || "");
+  var webhookUrl = _webhookUrl[0];
+  var setWebhookUrl = _webhookUrl[1];
+  // The saved webhook URL itself never reaches the browser — only this
+  // yes/no flag does. Tracked locally too, so the UI updates the moment
+  // the owner saves one.
+  var _webhookSet = React.useState(!!settings._webhookSet);
+  var webhookSet = _webhookSet[0];
+  var setWebhookSet = _webhookSet[1];
+  var _pingSent = React.useState(false);
+  var pingSent = _pingSent[0];
+  var setPingSent = _pingSent[1];
+  var _comboBuilder = React.useState([]);
+  var comboBuilder = _comboBuilder[0];
+  var setComboBuilder = _comboBuilder[1];
+  var _triggerClicks = React.useState(security.triggerClicks);
+  var triggerClicks = _triggerClicks[0];
+  var setTriggerClicks = _triggerClicks[1];
+  var _passcode = React.useState("");
+  var passcode = _passcode[0];
+  var setPasscode = _passcode[1];
+  var _showPasscode = React.useState(false);
+  var showPasscode = _showPasscode[0];
+  var setShowPasscode = _showPasscode[1];
+  var _secMsg = React.useState("");
+  var secMsg = _secMsg[0];
+  var setSecMsg = _secMsg[1];
+  var _savingPasscode = React.useState(false);
+  var savingPasscode = _savingPasscode[0];
+  var setSavingPasscode = _savingPasscode[1];
+  var _electricityRate = React.useState(pricing.electricityRate);
+  var electricityRate = _electricityRate[0];
+  var setElectricityRate = _electricityRate[1];
+  var _plaPricePerGram = React.useState(pricing.plaPricePerGram);
+  var plaPricePerGram = _plaPricePerGram[0];
+  var setPlaPricePerGram = _plaPricePerGram[1];
+  var _machineWearRate = React.useState(pricing.machineWearRate);
+  var machineWearRate = _machineWearRate[0];
+  var setMachineWearRate = _machineWearRate[1];
+  var _laborRate = React.useState(pricing.laborRate);
+  var laborRate = _laborRate[0];
+  var setLaborRate = _laborRate[1];
+  var _pricingMsg = React.useState("");
+  var pricingMsg = _pricingMsg[0];
+  var setPricingMsg = _pricingMsg[1];
+  function flashSec(msg) {
+    setSecMsg(msg);
+    setTimeout(function () {
+      setSecMsg("");
+    }, 2500);
+  }
+  function pressBuilderShape(shape) {
+    setComboBuilder(function (prev) {
+      return prev.length >= 6 ? prev : prev.concat([shape]);
+    });
+  }
+  function saveCombo() {
+    if (comboBuilder.length < 3) return;
+    props.updateSettings(function (prev) {
+      var next = Object.assign({}, prev);
+      next.security = Object.assign({}, prev.security || DEFAULT_SECURITY, {
+        combo: comboBuilder
+      });
+      // The stored combination is never echoed to the browser, so the
+      // server preserves it unless this flag marks an intentional change.
+      next.security._updateCombo = true;
+      return next;
+    }).then(function (ok) {
+      // Only acknowledge once the server confirmed the write — a failed
+      // save must not flash "Combination updated." (guardedSave already
+      // alerts about failures and re-routes the 401 re-gate path).
+      if (ok) {
+        setComboBuilder([]);
+        flashSec("Combination updated.");
+      }
+    });
+  }
+  function saveTrigger() {
+    props.updateSettings(function (prev) {
+      var next = Object.assign({}, prev);
+      next.security = Object.assign({}, prev.security || DEFAULT_SECURITY, {
+        triggerClicks: Number(triggerClicks) || 5
+      });
+      return next;
+    }).then(function (ok) {
+      if (ok) flashSec("Click count updated.");
+    });
+  }
+  function savePasscode() {
+    var value = (passcode || "").trim();
+    if (!value) return;
+    if (value.length < 12) {
+      flashSec("New passcode must be at least 12 characters.");
+      return;
+    }
+    if (value.toLowerCase() === "voxel-owner") {
+      flashSec("That's the well-known default passcode ? please choose your own.");
+      return;
+    }
+    setSavingPasscode(true);
+    // The server mixes in a per-install salt and a deliberately slow KDF,
+    // so only it can hash the passcode ? the plaintext exists only inside
+    // this POST body and is never stored or echoed back. _updatePasscode
+    // tells the server this is an intentional change; without it, a plain
+    // round-trip preserves the stored credential, because the dashboard
+    // never receives the current hash back (it's stripped from public
+    // reads for safety).
+    props.updateSettings(function (prev) {
+      var next = Object.assign({}, prev);
+      next.security = Object.assign({}, prev.security || DEFAULT_SECURITY, {
+        passcodeNew: value,
+        _updatePasscode: true
+      });
+      return next;
+    }).then(function (ok) {
+      // Only acknowledge once the server has CONFIRMED the write (and
+      // hashed with its KDF work factor) — "Passcode updated." before
+      // that would be a lie if the save were still in flight. guardedSave
+      // already alerts about failures, so a false result leaves the field
+      // intact for the owner to retry.
+      setSavingPasscode(false);
+      if (ok) {
+        setPasscode("");
+        flashSec("Passcode updated.");
+      }
+    });
+  }
+  function saveWebhook() {
+    // Clearing the field while a webhook is saved REMOVES it (the old
+    // code only ever replaced — the Save button was disabled on an empty
+    // field, so a webhook, once set, could never be turned off again).
+    var removing = webhookSet && !webhookUrl.trim();
+    var value = removing ? "" : webhookUrl.trim();
+    props.updateSettings(function (prev) {
+      var next = Object.assign({}, prev);
+      // _updateWebhook tells the server this URL is an intentional
+      // change — the current URL is never sent back to the browser,
+      // so the server preserves it unless this flag is set.
+      next._updateWebhook = true;
+      next.webhookUrl = value;
+      next._webhookSet = !removing;
+      return next;
+    }).then(function (ok) {
+      if (ok) {
+        setWebhookSet(!removing);
+        setWebhookUrl("");
+        flashSec(removing ? "Webhook removed." : "Webhook saved — it stays hidden from the site.");
+      }
+    });
+  }
+  function savePricing() {
+    props.updateSettings(function (prev) {
+      var next = Object.assign({}, prev);
+      next.pricing = {
+        electricityRate: Math.max(0, Number(electricityRate) || 0),
+        plaPricePerGram: Math.max(0, Number(plaPricePerGram) || 0),
+        machineWearRate: Math.max(0, Number(machineWearRate) || 0),
+        laborRate: Math.max(0, Number(laborRate) || 0)
+      };
+      return next;
+    }).then(function (ok) {
+      if (ok) {
+        setPricingMsg("Saved — new models will use these rates from now on. Anything already in your catalog keeps its existing price.");
+        setTimeout(function () {
+          setPricingMsg("");
+        }, 4000);
+      }
+    });
+  }
+  function testPing() {
+    // Owner-only endpoint — requires this dashboard's admin session.
+    apiTestPingDiscord().then(function (ok) {
+      setPingSent(ok);
+      setTimeout(function () {
+        setPingSent(false);
+      }, 3000);
+    });
+  }
+  var _filmZipNote = React.useState("");
+  var filmZipNote = _filmZipNote[0];
+  var setFilmZipNote = _filmZipNote[1];
+  var _filmZipErr = React.useState(false);
+  var filmZipErr = _filmZipErr[0];
+  var setFilmZipErr = _filmZipErr[1];
+  function downloadFilmZip() {
+    setFilmZipNote("");
+    setFilmZipErr(false);
+    fetch("/api/media/film-archive", {
+      headers: {
+        "x-voxel-token": getAdminApiToken() || ""
+      }
+    }).then(function (r) {
+      if (!r.ok) throw new Error(String(r.status));
+      return r.blob();
+    }).then(function (blob) {
+      // Same "download this exact thing" trick as everywhere else:
+      // make a temporary object URL, click a hidden anchor, clean up.
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement("a");
+      a.href = url;
+      a.download = "voxel-film-frames.zip";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(function () {
+        URL.revokeObjectURL(url);
+      }, 5000);
+      setFilmZipNote("Downloading voxel-film-frames.zip");
+    }).catch(function () {
+      setFilmZipErr(true);
+      setFilmZipNote("Couldn't build the ZIP — try again in a moment.");
+    });
+  }
+  return /*#__PURE__*/React.createElement("div", {
+    className: "flex flex-col gap-12 max-w-xl"
+  }, /*#__PURE__*/React.createElement("section", null, /*#__PURE__*/React.createElement("h3", {
+    className: "font-display text-lg mb-2",
+    style: {
+      color: "var(--ink)"
+    }
+  }, "Owner entry security"), /*#__PURE__*/React.createElement("p", {
+    className: "text-sm mb-4",
+    style: {
+      color: "var(--ink-dim)"
+    }
+  }, "To get in: click your business name in the footer ", security.triggerClicks, " times quickly, enter the combination, then the passcode. Change any of the three below."), /*#__PURE__*/React.createElement("div", {
+    className: "mb-6"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "text-sm mb-2",
+    style: {
+      color: "var(--ink)"
+    }
+  }, "Footer clicks needed"), /*#__PURE__*/React.createElement("div", {
+    className: "flex gap-2"
+  }, /*#__PURE__*/React.createElement("input", {
+    type: "number",
+    min: 3,
+    max: 10,
+    value: triggerClicks,
+    onChange: function (e) {
+      setTriggerClicks(e.target.value);
+    },
+    className: "w-24 px-3 py-2 rounded-md text-sm",
+    style: {
+      background: "var(--panel)",
+      border: "1px solid var(--line)",
+      color: "var(--ink)"
+    }
+  }), /*#__PURE__*/React.createElement(SecondaryButton, {
+    onClick: saveTrigger
+  }, "Save"))), /*#__PURE__*/React.createElement("div", {
+    className: "mb-6"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "text-sm mb-2",
+    style: {
+      color: "var(--ink)"
+    }
+  }, "Current combination"), /*#__PURE__*/React.createElement("div", {
+    className: "flex items-center gap-2 mb-3"
+  }, Array.from({
+    length: security.comboLength || 4
+  }).map(function (_, i) {
+    return /*#__PURE__*/React.createElement("span", {
+      key: i,
+      className: "rounded-md flex items-center justify-center",
+      style: {
+        width: 34,
+        height: 34,
+        background: "var(--panel)",
+        border: "1px solid var(--line)"
+      }
+    }, /*#__PURE__*/React.createElement(ShapeIcon, {
+      shape: "circle",
+      size: 0
+    }));
+  })), /*#__PURE__*/React.createElement("div", {
+    className: "text-xs mb-2",
+    style: {
+      color: "var(--ink-dim)"
+    }
+  }, "Tap shapes below in the new order you want (3 to 6 taps), then save."), /*#__PURE__*/React.createElement("div", {
+    className: "flex items-center gap-2 mb-2"
+  }, COMBO_SHAPES.map(function (shape) {
+    return /*#__PURE__*/React.createElement("button", {
+      type: "button",
+      key: shape,
+      onClick: function () {
+        pressBuilderShape(shape);
+      },
+      className: "cursor-pointer rounded-md",
+      style: {
+        width: 34,
+        height: 34,
+        background: "var(--panel)",
+        border: "1px solid var(--line)"
+      }
+    }, /*#__PURE__*/React.createElement(ShapeIcon, {
+      shape: shape
+    }));
+  })), /*#__PURE__*/React.createElement("div", {
+    className: "flex items-center gap-2 mb-3",
+    style: {
+      minHeight: 28
+    }
+  }, comboBuilder.map(function (s, i) {
+    return /*#__PURE__*/React.createElement("span", {
+      key: i,
+      className: "rounded-md flex items-center justify-center",
+      style: {
+        width: 28,
+        height: 28,
+        background: "var(--brass-soft)",
+        border: "1px solid var(--brass)"
+      }
+    }, /*#__PURE__*/React.createElement(ShapeIcon, {
+      shape: s,
+      size: 16
+    }));
+  })), /*#__PURE__*/React.createElement("div", {
+    className: "flex gap-2"
+  }, /*#__PURE__*/React.createElement(SecondaryButton, {
+    onClick: function () {
+      setComboBuilder([]);
+    },
+    disabled: comboBuilder.length === 0
+  }, "Clear"), /*#__PURE__*/React.createElement(PrimaryButton, {
+    onClick: saveCombo,
+    disabled: comboBuilder.length < 3
+  }, "Save combination"))), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    className: "text-sm mb-2",
+    style: {
+      color: "var(--ink)"
+    }
+  }, "Passcode"), /*#__PURE__*/React.createElement("p", {
+    className: "text-xs mb-2",
+    style: {
+      color: "var(--ink-dim)"
+    }
+  }, "For security your current passcode is never stored in a readable form — only a one-way hash of it is kept, so it can't be shown here. Enter a new passcode below to change it."), /*#__PURE__*/React.createElement("div", {
+    className: "flex gap-2"
+  }, /*#__PURE__*/React.createElement("input", {
+    type: showPasscode ? "text" : "password",
+    value: passcode,
+    onChange: function (e) {
+      setPasscode(e.target.value);
+    },
+    placeholder: "New passcode",
+    autoComplete: "off",
+    className: "flex-1 px-3 py-2 rounded-md text-sm",
+    style: {
+      background: "var(--panel)",
+      border: "1px solid var(--line)",
+      color: "var(--ink)"
+    }
+  }), /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: function () {
+      setShowPasscode(function (s) {
+        return !s;
+      });
+    },
+    className: "cursor-pointer rounded-md flex items-center justify-center",
+    style: {
+      width: 42,
+      background: "var(--panel)",
+      border: "1px solid var(--line)",
+      color: "var(--ink-dim)"
+    }
+  }, showPasscode ? /*#__PURE__*/React.createElement(EyeOff, {
+    size: 16
+  }) : /*#__PURE__*/React.createElement(Eye, {
+    size: 16
+  })), /*#__PURE__*/React.createElement(SecondaryButton, {
+    onClick: savePasscode,
+    disabled: savingPasscode || !passcode.trim()
+  }, savingPasscode ? "Saving…" : "Save"))), secMsg && /*#__PURE__*/React.createElement("p", {
+    className: "text-xs mt-3",
+    style: {
+      color: "var(--teal)"
+    }
+  }, secMsg)), /*#__PURE__*/React.createElement("section", null, /*#__PURE__*/React.createElement("h3", {
+    className: "font-display text-lg mb-2",
+    style: {
+      color: "var(--ink)"
+    }
+  }, "Get notified in Discord"), /*#__PURE__*/React.createElement("p", {
+    className: "text-sm mb-3",
+    style: {
+      color: "var(--ink-dim)"
+    }
+  }, "Paste a Discord webhook link to get pinged there whenever someone taps Order now. In Discord: Server Settings → Integrations → Webhooks → New Webhook → Copy URL. The link is stored on the server only — visitors can never see, spam, or delete it."), (webhookSet || webhookUrl) && /*#__PURE__*/React.createElement("p", {
+    className: "text-xs mb-2 font-mono-ac",
+    style: {
+      color: "var(--teal)"
+    }
+  }, webhookSet ? "A webhook is saved and hidden. Paste a new link below to replace it, leave it empty and save to remove it, or test it as-is." : ""), /*#__PURE__*/React.createElement("div", {
+    className: "flex gap-2"
+  }, /*#__PURE__*/React.createElement("input", {
+    value: webhookUrl,
+    onChange: function (e) {
+      setWebhookUrl(e.target.value);
+    },
+    placeholder: webhookSet ? "Saved — paste a new link to replace, or leave empty and save to remove" : "https://discord.com/api/webhooks/...",
+    className: "flex-1 px-3.5 py-2.5 rounded-md text-sm font-mono-ac",
+    style: {
+      background: "var(--panel)",
+      border: "1px solid var(--line)",
+      color: "var(--ink)"
+    }
+  }), /*#__PURE__*/React.createElement(SecondaryButton, {
+    onClick: saveWebhook,
+    disabled: !webhookUrl.trim() && !webhookSet
+  }, webhookSet && !webhookUrl.trim() ? "Remove" : "Save")), /*#__PURE__*/React.createElement("div", {
+    className: "flex items-center gap-3 mt-3"
+  }, /*#__PURE__*/React.createElement(SecondaryButton, {
+    onClick: testPing,
+    icon: Send
+  }, "Send test ping"), pingSent && /*#__PURE__*/React.createElement("span", {
+    className: "text-xs",
+    style: {
+      color: "var(--teal)"
+    }
+  }, "Sent — check Discord."))), /*#__PURE__*/React.createElement("section", null, /*#__PURE__*/React.createElement("h3", {
+    className: "font-display text-lg mb-2",
+    style: {
+      color: "var(--ink)"
+    }
+  }, "Background photos"), /*#__PURE__*/React.createElement("p", {
+    className: "text-sm mb-4",
+    style: {
+      color: "var(--ink-dim)"
+    }
+  }, "The 64 frames that play behind the shop as you scroll are plain files in the film folder — grab every one at once. Handy for keeping a local copy, previewing, or running the full set through an upscaler in a single pass."), /*#__PURE__*/React.createElement("div", {
+    className: "flex items-center gap-3"
+  }, /*#__PURE__*/React.createElement(SecondaryButton, {
+    onClick: downloadFilmZip,
+    icon: Download
+  }, "Download all background photos (ZIP)"), filmZipNote && /*#__PURE__*/React.createElement("span", {
+    className: "text-xs",
+    style: {
+      color: filmZipErr ? "var(--danger)" : "var(--teal)"
+    }
+  }, filmZipNote))), /*#__PURE__*/React.createElement("section", null, /*#__PURE__*/React.createElement("h3", {
+    className: "font-display text-lg mb-2",
+    style: {
+      color: "var(--ink)"
+    }
+  }, "Print pricing calculator"), /*#__PURE__*/React.createElement("p", {
+    className: "text-sm mb-4",
+    style: {
+      color: "var(--ink-dim)"
+    }
+  }, "When you fill in a model's filament weight and print time (in Catalog, or when importing several at once), the price gets calculated automatically from the rates below — always as PLA. Changing these only affects models you add from now on; anything already in your catalog keeps whatever price it already has."), /*#__PURE__*/React.createElement("div", {
+    className: "grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4"
+  }, /*#__PURE__*/React.createElement("label", {
+    className: "flex flex-col gap-1.5 text-sm",
+    style: {
+      color: "var(--ink)"
+    }
+  }, "Electricity rate ($/kWh)", /*#__PURE__*/React.createElement("input", {
+    type: "number",
+    min: 0,
+    step: "0.01",
+    value: electricityRate,
+    onChange: function (e) {
+      setElectricityRate(e.target.value);
+    },
+    className: "px-3 py-2 rounded-md text-sm",
+    style: {
+      background: "var(--panel)",
+      border: "1px solid var(--line)",
+      color: "var(--ink)"
+    }
+  })), /*#__PURE__*/React.createElement("label", {
+    className: "flex flex-col gap-1.5 text-sm",
+    style: {
+      color: "var(--ink)"
+    }
+  }, "PLA price ($ per gram)", /*#__PURE__*/React.createElement("input", {
+    type: "number",
+    min: 0,
+    step: "0.001",
+    value: plaPricePerGram,
+    onChange: function (e) {
+      setPlaPricePerGram(e.target.value);
+    },
+    className: "px-3 py-2 rounded-md text-sm",
+    style: {
+      background: "var(--panel)",
+      border: "1px solid var(--line)",
+      color: "var(--ink)"
+    }
+  })), /*#__PURE__*/React.createElement("label", {
+    className: "flex flex-col gap-1.5 text-sm",
+    style: {
+      color: "var(--ink)"
+    }
+  }, "Machine wear ($/hour)", /*#__PURE__*/React.createElement("input", {
+    type: "number",
+    min: 0,
+    step: "0.1",
+    value: machineWearRate,
+    onChange: function (e) {
+      setMachineWearRate(e.target.value);
+    },
+    className: "px-3 py-2 rounded-md text-sm",
+    style: {
+      background: "var(--panel)",
+      border: "1px solid var(--line)",
+      color: "var(--ink)"
+    }
+  })), /*#__PURE__*/React.createElement("label", {
+    className: "flex flex-col gap-1.5 text-sm",
+    style: {
+      color: "var(--ink)"
+    }
+  }, "Your own time ($/hour)", /*#__PURE__*/React.createElement("input", {
+    type: "number",
+    min: 0,
+    step: "0.1",
+    value: laborRate,
+    onChange: function (e) {
+      setLaborRate(e.target.value);
+    },
+    className: "px-3 py-2 rounded-md text-sm",
+    style: {
+      background: "var(--panel)",
+      border: "1px solid var(--line)",
+      color: "var(--ink)"
+    }
+  }))), /*#__PURE__*/React.createElement("p", {
+    className: "text-xs mb-3",
+    style: {
+      color: "var(--ink-dim)"
+    }
+  }, "PLA price tip: spool price ÷ spool weight in grams — e.g. a $20, 1kg spool is $20 ÷ 1000 = 0.02."), /*#__PURE__*/React.createElement(SecondaryButton, {
+    onClick: savePricing
+  }, "Save pricing"), pricingMsg && /*#__PURE__*/React.createElement("p", {
+    className: "text-xs mt-3",
+    style: {
+      color: "var(--teal)"
+    }
+  }, pricingMsg)));
+}
+function AdminView(props) {
+  var content = props.content;
+  var tabs = [{
+    id: "orders",
+    label: "Inquiries",
+    icon: ClipboardList
+  }, {
+    id: "catalog",
+    label: "Catalog",
+    icon: Layers
+  }, {
+    id: "prints",
+    label: "Prints wall",
+    icon: ImageIcon
+  }, {
+    id: "content",
+    label: "Content",
+    icon: TypeIcon
+  }, {
+    id: "settings",
+    label: "Settings",
+    icon: SettingsIcon
+  }];
+  return /*#__PURE__*/React.createElement("div", {
+    className: "voxel-admin-view max-w-6xl mx-auto px-5 sm:px-8 py-10"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "flex items-center justify-between mb-8"
+  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement(Eyebrow, null, "Owner dashboard"), /*#__PURE__*/React.createElement("h2", {
+    className: "font-display text-2xl",
+    style: {
+      color: "var(--ink)"
+    }
+  }, content.businessName, " dashboard")), /*#__PURE__*/React.createElement(SecondaryButton, {
+    onClick: props.goHome
+  }, "View shop")), /*#__PURE__*/React.createElement("div", {
+    className: "flex items-center gap-2 mb-8"
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: props.onSignOut,
+    className: "px-3 py-1.5 text-xs cursor-pointer border-0 rounded-full",
+    style: {
+      background: "transparent",
+      color: "var(--ink-dim)",
+      border: "1px solid var(--line)"
+    }
+  }, "Sign out — end this session"), /*#__PURE__*/React.createElement("span", {
+    className: "text-xs",
+    style: {
+      color: "var(--ink-dim)"
+    }
+  }, "Revokes the dashboard token on the server; re-enter via the footer gate to get back in.")), /*#__PURE__*/React.createElement("div", {
+    className: "flex gap-2 mb-8 flex-wrap",
+    style: {
+      borderBottom: "1px solid var(--line)"
+    }
+  }, tabs.map(function (t) {
+    var TabIcon = t.icon;
+    return /*#__PURE__*/React.createElement("button", {
+      key: t.id,
+      onClick: function () {
+        props.setTab(t.id);
+      },
+      className: "flex items-center gap-2 px-4 py-3 text-sm cursor-pointer border-0",
+      style: {
+        background: "transparent",
+        color: props.tab === t.id ? "var(--ink)" : "var(--ink-dim)",
+        borderBottom: props.tab === t.id ? "2px solid var(--brass)" : "2px solid transparent"
+      }
+    }, /*#__PURE__*/React.createElement(TabIcon, {
+      size: 15
+    }), " ", t.label);
+  })), props.tab === "orders" && /*#__PURE__*/React.createElement(AdminInquiries, {
+    inquiries: props.inquiries,
+    onDelete: props.deleteInquiry,
+    onClear: props.clearInquiries
+  }), props.tab === "catalog" && /*#__PURE__*/React.createElement(AdminCatalog, {
+    categories: props.categories,
+    models: props.models,
+    addCategory: props.addCategory,
+    renameCategory: props.renameCategory,
+    deleteCategory: props.deleteCategory,
+    addModel: props.addModel,
+    updateModel: props.updateModel,
+    deleteModel: props.deleteModel,
+    toggleFeatured: props.toggleFeatured,
+    importModels: props.importModels,
+    content: content,
+    settings: props.settings
+  }), props.tab === "content" && /*#__PURE__*/React.createElement(AdminContent, {
+    content: content,
+    updateContent: props.updateContent
+  }), props.tab === "prints" && /*#__PURE__*/React.createElement(AdminPrintsWall, {
+    content: props.content,
+    updateContent: props.updateContent
+  }), props.tab === "settings" && /*#__PURE__*/React.createElement(AdminSettings, {
+    settings: props.settings,
+    updateSettings: props.updateSettings
+  }));
+}

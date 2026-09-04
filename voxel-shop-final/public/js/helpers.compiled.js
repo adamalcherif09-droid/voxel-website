@@ -47,28 +47,49 @@ var DEFAULT_CONTENT = {
   showRecentPrints: true,
   recentPrintsEyebrow: "Recent prints",
   recentPrintsSpeed: "2.6",
-  recentPrints: [],
+  recentPrints: []
 };
-
-var DEFAULT_CATEGORIES = [
-  { id: "cat-fidgets", name: "Fidgets & Toys" },
-  { id: "cat-decor", name: "Home & Decor" },
-  { id: "cat-desk", name: "Desk & Office" },
-  { id: "cat-keychains", name: "Keychains & Accessories" },
-  { id: "cat-organizers", name: "Organizers & Storage" },
-  { id: "cat-cosplay", name: "Cosplay & Props" },
-  { id: "cat-miniatures", name: "Miniatures & Figures" },
-  { id: "cat-tech", name: "Tech & Gadgets" },
-  { id: "cat-statement", name: "Statement & Large-Format Prints" },
-  { id: "cat-gifts", name: "Gifts & Novelty" },
-];
+var DEFAULT_CATEGORIES = [{
+  id: "cat-fidgets",
+  name: "Fidgets & Toys"
+}, {
+  id: "cat-decor",
+  name: "Home & Decor"
+}, {
+  id: "cat-desk",
+  name: "Desk & Office"
+}, {
+  id: "cat-keychains",
+  name: "Keychains & Accessories"
+}, {
+  id: "cat-organizers",
+  name: "Organizers & Storage"
+}, {
+  id: "cat-cosplay",
+  name: "Cosplay & Props"
+}, {
+  id: "cat-miniatures",
+  name: "Miniatures & Figures"
+}, {
+  id: "cat-tech",
+  name: "Tech & Gadgets"
+}, {
+  id: "cat-statement",
+  name: "Statement & Large-Format Prints"
+}, {
+  id: "cat-gifts",
+  name: "Gifts & Novelty"
+}];
 
 // A virtual category that always exists and always contains every
 // model, regardless of which real category they're actually filed
 // under. It's not stored anywhere — just computed on the fly — so
 // there's nothing for the admin dashboard to manage for it.
 var ALL_DESIGNS_CATEGORY_ID = "__all__";
-var ALL_DESIGNS_CATEGORY = { id: ALL_DESIGNS_CATEGORY_ID, name: "All Designs" };
+var ALL_DESIGNS_CATEGORY = {
+  id: ALL_DESIGNS_CATEGORY_ID,
+  name: "All Designs"
+};
 
 // The prints wall stores compressed photos as text inside the content
 // document — same trade-off as catalog photos. Capped so a save can't
@@ -85,27 +106,130 @@ var RECENT_PRINTS_MAX = 40;
     contrast and the hardcoded button inks stay safe.
     swatch: [canvas, accent, secondary] used by the picker UI.
 --------------------------------------------------------- */
-var SITE_THEMES = [
-  { id: "default", label: "Default", desc: "The everyday Voxel look", canvas: "#d5c4ba", accent: "#b58763", second: "#0f212b" },
-  { id: "christmas", label: "Christmas", desc: "Pine green & festive red", canvas: "#e8efe6", accent: "#a93226", second: "#1e4633" },
-  { id: "newyear", label: "New Year", desc: "Ivory, gold & midnight", canvas: "#e9edf2", accent: "#a8842c", second: "#1b2a3d" },
-  { id: "valentine", label: "Valentine's", desc: "Blush & rose", canvas: "#f7e8ea", accent: "#b04a5a", second: "#4a2432" },
-  { id: "easter", label: "Easter", desc: "Spring lilac & meadow", canvas: "#eef0e4", accent: "#8a7fb5", second: "#3f6f5f" },
-  { id: "ramadan", label: "Ramadan", desc: "Warm ivory & lantern gold", canvas: "#ece5d3", accent: "#a07d2e", second: "#1f2d4d" },
-  { id: "eid", label: "Eid", desc: "Festive green & cream", canvas: "#e9f0e4", accent: "#2e7d4f", second: "#143d28" },
-  { id: "halloween", label: "Halloween", desc: "Pumpkin & dusk purple", canvas: "#eee9e1", accent: "#c2610f", second: "#3f2a55" },
-  { id: "mothersday", label: "Mother's Day", desc: "Soft rose & mauve", canvas: "#f7e9ee", accent: "#b05a7f", second: "#5a2a3f" },
-  { id: "fathersday", label: "Father's Day", desc: "Navy & steel blue", canvas: "#e9edf1", accent: "#35548a", second: "#5a6d84" },
-  { id: "independenceday", label: "Independence Day", desc: "Flag red & cedar green", canvas: "#f4ecec", accent: "#b02020", second: "#2a5540" },
-  { id: "graduation", label: "Graduation", desc: "Maroon & academic gold", canvas: "#eceade", accent: "#7a2f3f", second: "#8a6d1f" },
-  { id: "backtoschool", label: "Back to School", desc: "School blue & pencil gold", canvas: "#eef0f4", accent: "#3f62a8", second: "#b58a1f" },
-  { id: "spring", label: "Spring", desc: "Fresh meadow green", canvas: "#edf3e6", accent: "#5a8f3c", second: "#2a6b52" },
-  { id: "summer", label: "Summer", desc: "Sea blue & sunset coral", canvas: "#e6f0f4", accent: "#1a7fa8", second: "#c96f2d" },
-  { id: "autumn", label: "Autumn", desc: "Harvest orange & walnut", canvas: "#f2e8dc", accent: "#b56a1f", second: "#5d4426" },
-  { id: "winter", label: "Winter", desc: "Frost blue & slate", canvas: "#e8edf2", accent: "#4a7ba6", second: "#2d4a63" },
-];
+var SITE_THEMES = [{
+  id: "default",
+  label: "Default",
+  desc: "The everyday Voxel look",
+  canvas: "#d5c4ba",
+  accent: "#b58763",
+  second: "#0f212b"
+}, {
+  id: "christmas",
+  label: "Christmas",
+  desc: "Pine green & festive red",
+  canvas: "#e8efe6",
+  accent: "#a93226",
+  second: "#1e4633"
+}, {
+  id: "newyear",
+  label: "New Year",
+  desc: "Ivory, gold & midnight",
+  canvas: "#e9edf2",
+  accent: "#a8842c",
+  second: "#1b2a3d"
+}, {
+  id: "valentine",
+  label: "Valentine's",
+  desc: "Blush & rose",
+  canvas: "#f7e8ea",
+  accent: "#b04a5a",
+  second: "#4a2432"
+}, {
+  id: "easter",
+  label: "Easter",
+  desc: "Spring lilac & meadow",
+  canvas: "#eef0e4",
+  accent: "#8a7fb5",
+  second: "#3f6f5f"
+}, {
+  id: "ramadan",
+  label: "Ramadan",
+  desc: "Warm ivory & lantern gold",
+  canvas: "#ece5d3",
+  accent: "#a07d2e",
+  second: "#1f2d4d"
+}, {
+  id: "eid",
+  label: "Eid",
+  desc: "Festive green & cream",
+  canvas: "#e9f0e4",
+  accent: "#2e7d4f",
+  second: "#143d28"
+}, {
+  id: "halloween",
+  label: "Halloween",
+  desc: "Pumpkin & dusk purple",
+  canvas: "#eee9e1",
+  accent: "#c2610f",
+  second: "#3f2a55"
+}, {
+  id: "mothersday",
+  label: "Mother's Day",
+  desc: "Soft rose & mauve",
+  canvas: "#f7e9ee",
+  accent: "#b05a7f",
+  second: "#5a2a3f"
+}, {
+  id: "fathersday",
+  label: "Father's Day",
+  desc: "Navy & steel blue",
+  canvas: "#e9edf1",
+  accent: "#35548a",
+  second: "#5a6d84"
+}, {
+  id: "independenceday",
+  label: "Independence Day",
+  desc: "Flag red & cedar green",
+  canvas: "#f4ecec",
+  accent: "#b02020",
+  second: "#2a5540"
+}, {
+  id: "graduation",
+  label: "Graduation",
+  desc: "Maroon & academic gold",
+  canvas: "#eceade",
+  accent: "#7a2f3f",
+  second: "#8a6d1f"
+}, {
+  id: "backtoschool",
+  label: "Back to School",
+  desc: "School blue & pencil gold",
+  canvas: "#eef0f4",
+  accent: "#3f62a8",
+  second: "#b58a1f"
+}, {
+  id: "spring",
+  label: "Spring",
+  desc: "Fresh meadow green",
+  canvas: "#edf3e6",
+  accent: "#5a8f3c",
+  second: "#2a6b52"
+}, {
+  id: "summer",
+  label: "Summer",
+  desc: "Sea blue & sunset coral",
+  canvas: "#e6f0f4",
+  accent: "#1a7fa8",
+  second: "#c96f2d"
+}, {
+  id: "autumn",
+  label: "Autumn",
+  desc: "Harvest orange & walnut",
+  canvas: "#f2e8dc",
+  accent: "#b56a1f",
+  second: "#5d4426"
+}, {
+  id: "winter",
+  label: "Winter",
+  desc: "Frost blue & slate",
+  canvas: "#e8edf2",
+  accent: "#4a7ba6",
+  second: "#2d4a63"
+}];
 function isKnownTheme(id) {
-  return SITE_THEMES.some(function (t) { return t.id === id; });
+  return SITE_THEMES.some(function (t) {
+    return t.id === id;
+  });
 }
 
 // A short animated "Happy <holiday>" greeting shown once when the site
@@ -113,22 +237,70 @@ function isKnownTheme(id) {
 // of emojis that burst out of the greeting like fireworks. "default"
 // (the everyday look) shows nothing — this is a seasonal-only flourish.
 var THEME_GREETINGS = {
-  christmas:       { text: "Happy Christmas",       emojis: ["\u2744", "\u1F384", "\u1F381", "\u2603", "\u2B50"] },
-  newyear:         { text: "Happy New Year",        emojis: ["\u2728", "\u1F386", "\u1F942", "\u2B50", "\u1F38A"] },
-  valentine:       { text: "Happy Valentine's Day", emojis: ["\u2764", "\u1F496", "\u1F48B", "\u1F498", "\u1F49A"] },
-  easter:          { text: "Happy Easter",          emojis: ["\u1F430", "\u1F95A", "\u1F338", "\u1F407", "\u1F33B"] },
-  ramadan:         { text: "Happy Ramadan",         emojis: ["\u1F319", "\u1F3EE", "\u2B50", "\u1F54C", "\u1F383"] },
-  eid:             { text: "Happy Eid",             emojis: ["\u2728", "\u1F31F", "\u1F319", "\u2B50", "\u1F38F"] },
-  halloween:       { text: "Happy Halloween",       emojis: ["\u1F383", "\u1F47B", "\u1F987", "\u1F479", "\u1F312"] },
-  mothersday:      { text: "Happy Mother's Day",    emojis: ["\u1F338", "\u1F49B", "\u1F339", "\u1F33C", "\u1F497"] },
-  fathersday:      { text: "Happy Father's Day",    emojis: ["\u1F454", "\u2615", "\u1F9E7", "\u1F9D4", "\u1F512"] },
-  independenceday: { text: "Happy Independence Day", emojis: ["\u1F386", "\u2B50", "\u1F1F1", "\u1F1E7", "\u2728"] },
-  graduation:      { text: "Happy Graduation",      emojis: ["\u1F393", "\u1F4DC", "\u2728", "\u1F3C5", "\u1F389"] },
-  backtoschool:    { text: "Happy Back to School",  emojis: ["\u270F", "\u1F4DA", "\u1F4D6", "\u1F4C4", "\u1F3A0"] },
-  spring:          { text: "Happy Spring",          emojis: ["\u1F338", "\u1F98B", "\u1F33F", "\u1F331", "\u1F41B"] },
-  summer:          { text: "Happy Summer",          emojis: ["\u2600", "\u1F3D6", "\u1F334", "\u1F30A", "\u1F319"] },
-  autumn:          { text: "Happy Autumn",          emojis: ["\u1F341", "\u1F330", "\u1F342", "\u1F333", "\u1F984"] },
-  winter:          { text: "Happy Winter",          emojis: ["\u2744", "\u26C4", "\u2B1F", "\u1F328", "\u1F3BF"] },
+  christmas: {
+    text: "Happy Christmas",
+    emojis: ["\u2744", "\u1F384", "\u1F381", "\u2603", "\u2B50"]
+  },
+  newyear: {
+    text: "Happy New Year",
+    emojis: ["\u2728", "\u1F386", "\u1F942", "\u2B50", "\u1F38A"]
+  },
+  valentine: {
+    text: "Happy Valentine's Day",
+    emojis: ["\u2764", "\u1F496", "\u1F48B", "\u1F498", "\u1F49A"]
+  },
+  easter: {
+    text: "Happy Easter",
+    emojis: ["\u1F430", "\u1F95A", "\u1F338", "\u1F407", "\u1F33B"]
+  },
+  ramadan: {
+    text: "Happy Ramadan",
+    emojis: ["\u1F319", "\u1F3EE", "\u2B50", "\u1F54C", "\u1F383"]
+  },
+  eid: {
+    text: "Happy Eid",
+    emojis: ["\u2728", "\u1F31F", "\u1F319", "\u2B50", "\u1F38F"]
+  },
+  halloween: {
+    text: "Happy Halloween",
+    emojis: ["\u1F383", "\u1F47B", "\u1F987", "\u1F479", "\u1F312"]
+  },
+  mothersday: {
+    text: "Happy Mother's Day",
+    emojis: ["\u1F338", "\u1F49B", "\u1F339", "\u1F33C", "\u1F497"]
+  },
+  fathersday: {
+    text: "Happy Father's Day",
+    emojis: ["\u1F454", "\u2615", "\u1F9E7", "\u1F9D4", "\u1F512"]
+  },
+  independenceday: {
+    text: "Happy Independence Day",
+    emojis: ["\u1F386", "\u2B50", "\u1F1F1", "\u1F1E7", "\u2728"]
+  },
+  graduation: {
+    text: "Happy Graduation",
+    emojis: ["\u1F393", "\u1F4DC", "\u2728", "\u1F3C5", "\u1F389"]
+  },
+  backtoschool: {
+    text: "Happy Back to School",
+    emojis: ["\u270F", "\u1F4DA", "\u1F4D6", "\u1F4C4", "\u1F3A0"]
+  },
+  spring: {
+    text: "Happy Spring",
+    emojis: ["\u1F338", "\u1F98B", "\u1F33F", "\u1F331", "\u1F41B"]
+  },
+  summer: {
+    text: "Happy Summer",
+    emojis: ["\u2600", "\u1F3D6", "\u1F334", "\u1F30A", "\u1F319"]
+  },
+  autumn: {
+    text: "Happy Autumn",
+    emojis: ["\u1F341", "\u1F330", "\u1F342", "\u1F333", "\u1F984"]
+  },
+  winter: {
+    text: "Happy Winter",
+    emojis: ["\u2744", "\u26C4", "\u2B1F", "\u1F328", "\u1F3BF"]
+  }
 };
 function getThemeGreeting(themeId) {
   if (!themeId || themeId === "default") return null;
@@ -144,7 +316,6 @@ function isNewModel(model, days) {
   if (!windowDays || windowDays < 0) windowDays = 7;
   return Date.now() - model.createdAt < windowDays * 24 * 60 * 60 * 1000;
 }
-
 var ALLOWED_FILE_EXTENSIONS = [".stl", ".3mf", ".step", ".stp", ".obj"];
 
 // Product photos: 640px / q0.62 is the sweet spot for this host — cards
@@ -171,7 +342,7 @@ function canvasToCompressedDataUrl(canvas, quality) {
   try {
     var webp = canvas.toDataURL("image/webp", quality);
     if (typeof webp === "string" && webp.indexOf("data:image/webp") === 0) return webp;
-  } catch (e) { /* fall through to the JPEG path */ }
+  } catch (e) {/* fall through to the JPEG path */}
   return canvas.toDataURL("image/jpeg", quality);
 }
 
@@ -180,32 +351,32 @@ function canvasToCompressedDataUrl(canvas, quality) {
 // (see the load effect in app.js). One entry holds catalog + settings +
 // content together so the whole page renders from a single read.
 var PAGE_CACHE_KEY = "voxel-page-cache-v1";
-
 function readPageCache() {
   try {
     var raw = window.localStorage.getItem(PAGE_CACHE_KEY);
     if (!raw) return null;
     var parsed = JSON.parse(raw);
-    if (!parsed || typeof parsed !== "object" || !parsed.catalog ||
-        !Array.isArray(parsed.catalog.models)) return null;
+    if (!parsed || typeof parsed !== "object" || !parsed.catalog || !Array.isArray(parsed.catalog.models)) return null;
     return parsed;
-  } catch (e) { return null; }
+  } catch (e) {
+    return null;
+  }
 }
-
 function savePageCache(data) {
   try {
     window.localStorage.setItem(PAGE_CACHE_KEY, JSON.stringify({
       t: Date.now(),
       catalog: data.catalog,
       settings: data.settings,
-      content: data.content,
+      content: data.content
     }));
-  } catch (e) { /* storage full or blocked — instant paint just won't happen */ }
+  } catch (e) {/* storage full or blocked — instant paint just won't happen */}
 }
-
 function isAllowedFile(name) {
   var lower = name.toLowerCase();
-  return ALLOWED_FILE_EXTENSIONS.some(function (ext) { return lower.endsWith(ext); });
+  return ALLOWED_FILE_EXTENSIONS.some(function (ext) {
+    return lower.endsWith(ext);
+  });
 }
 
 // Formats a USD amount with the site's currency symbol, plus an
@@ -242,7 +413,7 @@ function calculatePrintPriceUSD(grams, hours, minutes, pricing) {
   var m = Math.max(0, Number(minutes) || 0);
   if (g === 0 && h === 0 && m === 0) return null;
   var p = pricing || DEFAULT_SETTINGS.pricing;
-  var totalHours = h + (m / 60);
+  var totalHours = h + m / 60;
   var materialCost = g * (p.plaPricePerGram || 0);
   var printElectricityCost = 0.14 * totalHours * (p.electricityRate || 0);
   var startupHeatingCost = 0.4 * (5 / 60) * (p.electricityRate || 0);
@@ -285,14 +456,12 @@ function buildTelUrl(phone) {
    you are in for the first time.
 --------------------------------------------------------- */
 var COMBO_SHAPES = ["circle", "square", "triangle", "diamond", "star", "hexagon"];
-
 var DEFAULT_SECURITY = {
   triggerClicks: 5,
   combo: ["circle", "triangle", "square", "diamond"],
   // SHA-256 of "voxel-owner" — change the passcode from Settings once inside.
-  passcodeHash: "dd079e3843773940e2221bed4328afe8ed5f3057b13e9e9388d07c9f8145a6fc",
+  passcodeHash: "dd079e3843773940e2221bed4328afe8ed5f3057b13e9e9388d07c9f8145a6fc"
 };
-
 var DEFAULT_SETTINGS = {
   webhookUrl: "",
   security: DEFAULT_SECURITY,
@@ -300,8 +469,8 @@ var DEFAULT_SETTINGS = {
     electricityRate: 0.35,
     plaPricePerGram: 0.03,
     machineWearRate: 2.5,
-    laborRate: 1.0,
-  },
+    laborRate: 1.0
+  }
 };
 
 /* ---------------------------------------------------------
@@ -321,16 +490,20 @@ var DEFAULT_SETTINGS = {
 // localStorage) on purpose: it dies with the tab, matching how
 // dashboard access already requires re-entering the gate each visit.
 var adminApiToken = "";
-try { adminApiToken = window.sessionStorage.getItem("voxel-admin-token") || ""; } catch (e) { adminApiToken = ""; }
-
+try {
+  adminApiToken = window.sessionStorage.getItem("voxel-admin-token") || "";
+} catch (e) {
+  adminApiToken = "";
+}
 function setAdminApiToken(token) {
   adminApiToken = token || "";
   try {
-    if (adminApiToken) window.sessionStorage.setItem("voxel-admin-token", adminApiToken);
-    else window.sessionStorage.removeItem("voxel-admin-token");
-  } catch (e) { /* storage unavailable — token just lives in memory */ }
+    if (adminApiToken) window.sessionStorage.setItem("voxel-admin-token", adminApiToken);else window.sessionStorage.removeItem("voxel-admin-token");
+  } catch (e) {/* storage unavailable — token just lives in memory */}
 }
-function getAdminApiToken() { return adminApiToken; }
+function getAdminApiToken() {
+  return adminApiToken;
+}
 
 // Revokes this tab's admin session on the server, so a token someone
 // walked off with dies immediately instead of living out its 24h TTL.
@@ -339,9 +512,15 @@ function getAdminApiToken() { return adminApiToken; }
 function apiLogout() {
   return fetch("/api/auth/logout", {
     method: "POST",
-    headers: { "Content-Type": "application/json", "x-voxel-token": adminApiToken || "" },
-  }).then(function (r) { return r.status >= 200 && r.status < 300; })
-    .catch(function () { return false; });
+    headers: {
+      "Content-Type": "application/json",
+      "x-voxel-token": adminApiToken || ""
+    }
+  }).then(function (r) {
+    return r.status >= 200 && r.status < 300;
+  }).catch(function () {
+    return false;
+  });
 }
 
 // Exchanges the raw passcode for a short-lived server-side admin
@@ -353,15 +532,24 @@ function apiLogout() {
 function apiAuth(password, combo) {
   return fetch("/api/auth", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ password: password, combo: combo || [] }),
-  })
-    .then(function (res) { return res.ok ? res.json() : null; })
-    .then(function (json) {
-      if (json && json.token) { setAdminApiToken(json.token); return json.token; }
-      return null;
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      password: password,
+      combo: combo || []
     })
-    .catch(function () { return null; });
+  }).then(function (res) {
+    return res.ok ? res.json() : null;
+  }).then(function (json) {
+    if (json && json.token) {
+      setAdminApiToken(json.token);
+      return json.token;
+    }
+    return null;
+  }).catch(function () {
+    return null;
+  });
 }
 
 // Like apiAuth, but keeps the HTTP status and the server's error code
@@ -371,22 +559,50 @@ function apiAuth(password, combo) {
 // sleeping instance — that first request can sit for a while) can never
 // freeze a UI button on "Checking…".
 function apiAuthDetailed(password, combo) {
-  var ctrl = (typeof AbortController !== "undefined") ? new AbortController() : null;
-  var timer = ctrl ? setTimeout(function () { ctrl.abort(); }, 15000) : null;
-  var clearTimer = function () { if (timer) { clearTimeout(timer); timer = null; } };
+  var ctrl = typeof AbortController !== "undefined" ? new AbortController() : null;
+  var timer = ctrl ? setTimeout(function () {
+    ctrl.abort();
+  }, 15000) : null;
+  var clearTimer = function () {
+    if (timer) {
+      clearTimeout(timer);
+      timer = null;
+    }
+  };
   return fetch("/api/auth", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ password: password, combo: combo || [] }),
-    signal: ctrl ? ctrl.signal : undefined,
-  })
-    .then(function (res) {
-      return res.json().catch(function () { return {}; }).then(function (json) {
-        clearTimer();
-        return { status: res.status, ok: res.ok, token: json.token || null, error: json.error || null, mode: json.mode || null, retryAfterSec: json.retryAfterSec || null };
-      });
-    })
-    .catch(function () { clearTimer(); return { status: 0, ok: false, token: null, error: "network", retryAfterSec: null }; });
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      password: password,
+      combo: combo || []
+    }),
+    signal: ctrl ? ctrl.signal : undefined
+  }).then(function (res) {
+    return res.json().catch(function () {
+      return {};
+    }).then(function (json) {
+      clearTimer();
+      return {
+        status: res.status,
+        ok: res.ok,
+        token: json.token || null,
+        error: json.error || null,
+        mode: json.mode || null,
+        retryAfterSec: json.retryAfterSec || null
+      };
+    });
+  }).catch(function () {
+    clearTimer();
+    return {
+      status: 0,
+      ok: false,
+      token: null,
+      error: "network",
+      retryAfterSec: null
+    };
+  });
 }
 
 // Asks the server whether the pressed shape sequence is the right one.
@@ -396,11 +612,17 @@ function apiAuthDetailed(password, combo) {
 function apiGateCombo(combo) {
   return fetch("/api/gate", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ combo: combo || [] }),
-  })
-    .then(function (res) { return res.ok; })
-    .catch(function () { return false; });
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      combo: combo || []
+    })
+  }).then(function (res) {
+    return res.ok;
+  }).catch(function () {
+    return false;
+  });
 }
 
 // Resolves to { ok: true, value: parsedValueOrNullOrCorruptFlaggedFalse }
@@ -409,18 +631,30 @@ function apiGateCombo(combo) {
 // "unknown state", never as "empty" — that distinction is what stops a
 // transient outage from being able to wipe real data.
 function storageGet(key) {
-  return fetch("/api/storage/" + encodeURIComponent(key))
-    .then(function (res) {
-      if (!res.ok) return { ok: false, value: null };
-      return res.json().then(function (data) {
-        try {
-          return { ok: true, value: data && data.value ? JSON.parse(data.value) : null };
-        } catch (e) {
-          return { ok: false, value: null }; // corrupt payload — unknown state
-        }
-      });
-    })
-    .catch(function () { return { ok: false, value: null }; });
+  return fetch("/api/storage/" + encodeURIComponent(key)).then(function (res) {
+    if (!res.ok) return {
+      ok: false,
+      value: null
+    };
+    return res.json().then(function (data) {
+      try {
+        return {
+          ok: true,
+          value: data && data.value ? JSON.parse(data.value) : null
+        };
+      } catch (e) {
+        return {
+          ok: false,
+          value: null
+        }; // corrupt payload — unknown state
+      }
+    });
+  }).catch(function () {
+    return {
+      ok: false,
+      value: null
+    };
+  });
 }
 
 // Returns { ok: true } when the server confirmed the write, otherwise
@@ -430,16 +664,28 @@ function storageGet(key) {
 // `opts.admin` marks owner-dashboard writes, which carry the session token
 // and are rejected by the server without one.
 function storageSet(key, value, opts) {
-  var headers = { "Content-Type": "application/json" };
+  var headers = {
+    "Content-Type": "application/json"
+  };
   var token = getAdminApiToken();
   if (opts && opts.admin && token) headers["x-voxel-token"] = token;
   return fetch("/api/storage/" + encodeURIComponent(key), {
     method: "POST",
     headers: headers,
-    body: JSON.stringify({ value: JSON.stringify(value) }),
-  })
-    .then(function (res) { return { ok: res.ok, status: res.status }; })
-    .catch(function () { return { ok: false, status: 0 }; });
+    body: JSON.stringify({
+      value: JSON.stringify(value)
+    })
+  }).then(function (res) {
+    return {
+      ok: res.ok,
+      status: res.status
+    };
+  }).catch(function () {
+    return {
+      ok: false,
+      status: 0
+    };
+  });
 }
 
 // Appends one inquiry through the public append-only endpoint. The
@@ -448,11 +694,17 @@ function storageSet(key, value, opts) {
 function saveInquiryRemote(entry) {
   return fetch("/api/inquiries", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ entry: entry }),
-  })
-    .then(function (res) { return res.ok; })
-    .catch(function () { return false; });
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      entry: entry
+    })
+  }).then(function (res) {
+    return res.ok;
+  }).catch(function () {
+    return false;
+  });
 }
 
 // Owner-only: reads the inquiry list with the admin session token.
@@ -462,18 +714,32 @@ function apiGetInquiries() {
   var headers = {};
   var token = getAdminApiToken();
   if (token) headers["x-voxel-token"] = token;
-  return fetch("/api/storage/voxel-inquiries", { headers: headers })
-    .then(function (res) {
-      if (!res.ok) return { ok: false, value: null };
-      return res.json().then(function (data) {
-        try {
-          return { ok: true, value: data && data.value ? JSON.parse(data.value) : [] };
-        } catch (e) {
-          return { ok: false, value: null };
-        }
-      });
-    })
-    .catch(function () { return { ok: false, value: null }; });
+  return fetch("/api/storage/voxel-inquiries", {
+    headers: headers
+  }).then(function (res) {
+    if (!res.ok) return {
+      ok: false,
+      value: null
+    };
+    return res.json().then(function (data) {
+      try {
+        return {
+          ok: true,
+          value: data && data.value ? JSON.parse(data.value) : []
+        };
+      } catch (e) {
+        return {
+          ok: false,
+          value: null
+        };
+      }
+    });
+  }).catch(function () {
+    return {
+      ok: false,
+      value: null
+    };
+  });
 }
 
 // Owner-only Discord test ping through /api/admin/test-ping, which
@@ -484,14 +750,21 @@ function apiGetInquiries() {
 function apiTestPingDiscord() {
   return fetch("/api/admin/test-ping", {
     method: "POST",
-    headers: { "Content-Type": "application/json", "x-voxel-token": adminApiToken || "" },
-    body: JSON.stringify({}),
-  })
-    .then(function (res) { return res.ok ? res.json() : { ok: false }; })
-    .then(function (json) { return !!(json && json.ok); })
-    .catch(function () { return false; });
+    headers: {
+      "Content-Type": "application/json",
+      "x-voxel-token": adminApiToken || ""
+    },
+    body: JSON.stringify({})
+  }).then(function (res) {
+    return res.ok ? res.json() : {
+      ok: false
+    };
+  }).then(function (json) {
+    return !!(json && json.ok);
+  }).catch(function () {
+    return false;
+  });
 }
-
 function makeId(prefix) {
   return prefix + "-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 }
@@ -515,7 +788,6 @@ function clampQty(q) {
   if (!isFinite(n) || isNaN(n)) n = 1;
   return Math.max(1, Math.min(MAX_CART_QTY, n));
 }
-
 function loadCart() {
   try {
     var raw = window.localStorage.getItem(CART_STORAGE_KEY);
@@ -530,7 +802,7 @@ function loadCart() {
         name: String(it.name || ""),
         price: String(it.price),
         image: String(it.image || ""),
-        qty: clampQty(it.qty),
+        qty: clampQty(it.qty)
       };
     });
   } catch (e) {
@@ -538,12 +810,14 @@ function loadCart() {
   }
 }
 function saveCart(items) {
-  try { window.localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(items)); }
-  catch (e) { /* private mode / storage blocked — cart just lives in memory */ }
+  try {
+    window.localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(items));
+  } catch (e) {/* private mode / storage blocked — cart just lives in memory */}
 }
 function clearCartStorage() {
-  try { window.localStorage.removeItem(CART_STORAGE_KEY); }
-  catch (e) { /* storage blocked — nothing to clear */ }
+  try {
+    window.localStorage.removeItem(CART_STORAGE_KEY);
+  } catch (e) {/* storage blocked — nothing to clear */}
 }
 var CART_ARCHIVE_KEY = "voxel-cart-archive-v1";
 
@@ -554,8 +828,11 @@ var CART_ARCHIVE_KEY = "voxel-cart-archive-v1";
 // regain them.
 function archiveCart(items) {
   try {
-    window.localStorage.setItem(CART_ARCHIVE_KEY, JSON.stringify({ items: items, archivedAt: Date.now() }));
-  } catch (e) { /* storage blocked — nothing to restore on the next visit */ }
+    window.localStorage.setItem(CART_ARCHIVE_KEY, JSON.stringify({
+      items: items,
+      archivedAt: Date.now()
+    }));
+  } catch (e) {/* storage blocked — nothing to restore on the next visit */}
 }
 function readCartArchive() {
   try {
@@ -569,21 +846,28 @@ function readCartArchive() {
   }
 }
 function clearCartArchive() {
-  try { window.localStorage.removeItem(CART_ARCHIVE_KEY); }
-  catch (e) { /* nothing to clear */ }
+  try {
+    window.localStorage.removeItem(CART_ARCHIVE_KEY);
+  } catch (e) {/* nothing to clear */}
 }
 function cartItemCount(items) {
-  return items.reduce(function (n, it) { return n + it.qty; }, 0);
+  return items.reduce(function (n, it) {
+    return n + it.qty;
+  }, 0);
 }
 function cartSubtotalUsd(items) {
-  return items.reduce(function (s, it) { return s + (Number(it.price) || 0) * it.qty; }, 0);
+  return items.reduce(function (s, it) {
+    return s + (Number(it.price) || 0) * it.qty;
+  }, 0);
 }
 // Builds the WhatsApp message a customer sends when checking out the
 // whole cart: one line per item with its quantity and line total, then
 // the grand total. No HTML; just clean plain text.
 function buildCartMessage(items, currencySymbol) {
   var sym = String(currencySymbol || "$");
-  var priced = items.filter(function (it) { return Number(it.price) > 0; });
+  var priced = items.filter(function (it) {
+    return Number(it.price) > 0;
+  });
   var pending = items.length - priced.length;
   var lines = items.map(function (it) {
     var price = Number(it.price) || 0;
@@ -592,18 +876,21 @@ function buildCartMessage(items, currencySymbol) {
   });
   var msg = "Hi! I'd like to order:" + "\n" + lines.join("\n");
   if (pending > 0) msg += "\n(" + pending + " item" + (pending > 1 ? "s" : "") + " \u2014 price to be confirmed)";
-  msg += priced.length > 0
-    ? "\nTotal: " + sym + cartSubtotalUsd(items).toFixed(2)
-    : "\nTotal: price to be confirmed";
+  msg += priced.length > 0 ? "\nTotal: " + sym + cartSubtotalUsd(items).toFixed(2) : "\nTotal: price to be confirmed";
   return msg;
 }
-
 function formatDate(ts) {
   if (!ts) return "";
   var d = new Date(ts);
-  return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) + " " + d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+  return d.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric"
+  }) + " " + d.toLocaleTimeString(undefined, {
+    hour: "numeric",
+    minute: "2-digit"
+  });
 }
-
 function compressImage(file, options) {
   var preserveAlpha = !!(options && options.preserveAlpha);
   return new Promise(function (resolve, reject) {
@@ -615,10 +902,10 @@ function compressImage(file, options) {
         var width = img.width;
         var height = img.height;
         if (width > height && width > maxDim) {
-          height = Math.round((height * maxDim) / width);
+          height = Math.round(height * maxDim / width);
           width = maxDim;
         } else if (height >= width && height > maxDim) {
-          width = Math.round((width * maxDim) / height);
+          width = Math.round(width * maxDim / height);
           height = maxDim;
         }
         var canvas = document.createElement("canvas");
@@ -660,10 +947,10 @@ function compressDataUrl(dataUrl, options) {
       var width = img.width;
       var height = img.height;
       if (width > height && width > maxDim) {
-        height = Math.round((height * maxDim) / width);
+        height = Math.round(height * maxDim / width);
         width = maxDim;
       } else if (height >= width && height > maxDim) {
-        width = Math.round((width * maxDim) / height);
+        width = Math.round(width * maxDim / height);
         height = maxDim;
       }
       var canvas = document.createElement("canvas");
@@ -677,8 +964,9 @@ function compressDataUrl(dataUrl, options) {
       ctx.drawImage(img, 0, 0, width, height);
       resolve(preserveAlpha ? canvas.toDataURL("image/png") : canvasToCompressedDataUrl(canvas, PRODUCT_IMAGE_JPEG_QUALITY));
     };
-    img.onerror = function () { resolve(""); };
+    img.onerror = function () {
+      resolve("");
+    };
     img.src = dataUrl;
   });
 }
-
