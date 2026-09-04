@@ -162,6 +162,7 @@ function ShareButton(props) {
 function ModelCard(props) {
   var model = props.model;
   var content = props.content;
+  var isActive = props.isActive !== false;
   var isNew = content.showNewBadge !== false && isNewModel(model, content.newBadgeDays);
   return (
     <div
@@ -169,9 +170,12 @@ function ModelCard(props) {
       className={"voxel-card rounded-lg overflow-hidden flex flex-col cursor-pointer"}
       style={{ background: "var(--panel)", border: props.highlight ? "1px solid var(--brass)" : "1px solid var(--line)" }}
     >
-      <div className="flex items-center justify-center" style={{ background: "var(--panel-2)", minHeight: model.image ? undefined : 140, position: "relative" }}>
+      <div className="voxel-model-photo" style={{ background: "var(--panel-2)", minHeight: model.image ? undefined : 140, position: "relative" }}>
         {model.image ? (
-          <img src={model.image} alt={model.name} loading="lazy" decoding="async" onLoad={function (e) { rememberImageRatio(model.id, e.currentTarget); }} style={{ width: "100%", height: "auto", display: "block" }} />
+          <React.Fragment>
+            <div className="voxel-img-placeholder" data-ratio={imageRatioFor(model.id)} style={{ width: "100%", aspectRatio: String(imageRatioFor(model.id)) }} />
+            <img className={"voxel-photo-img" + (isActive ? " is-active" : "")} src={model.image} alt={model.name} loading="lazy" decoding="async" onLoad={function (e) { rememberImageRatio(model.id, e.currentTarget); }} style={{ width: "100%", height: "auto", display: "block", position: "absolute", inset: 0, opacity: isActive ? 1 : 0 }} />
+          </React.Fragment>
         ) : (
           <ImageIcon size={26} style={{ color: "var(--ink-dim)" }} />
         )}
@@ -287,6 +291,7 @@ function HomeView(props) {
   var featured = models.filter(function (m) { return m.featured; });
   var recentPrints = content.recentPrints || [];
   var featuredMasonryRef = React.useRef(null);
+  var featuredActive = useVirtualImages(featuredMasonryRef);
 
   return (
     <div className="max-w-6xl mx-auto px-5 sm:px-8">
@@ -309,8 +314,8 @@ function HomeView(props) {
           <div className="voxel-masonry" ref={featuredMasonryRef}>
             {featured.map(function (m) {
               return (
-                <div key={m.id} className="voxel-masonry-item">
-                  <ModelCard model={m} content={content} onOrder={function () { props.onOrderModel(m); }} onView={function () { props.onViewModel(m); }} onAddToCart={function () { props.onAddToCart(m); }} highlight />
+                <div key={m.id} className="voxel-masonry-item" data-virtual-id={m.id}>
+                  <ModelCard model={m} content={content} isActive={featuredActive.has(m.id)} onOrder={function () { props.onOrderModel(m); }} onView={function () { props.onViewModel(m); }} onAddToCart={function () { props.onAddToCart(m); }} highlight />
                 </div>
               );
             })}
@@ -380,6 +385,7 @@ function CategoryView(props) {
       })
     : items;
   var masonryRef = React.useRef(null);
+  var activeSet = useVirtualImages(masonryRef);
 
   return (
     <div className="max-w-6xl mx-auto px-5 sm:px-8 py-10">
@@ -412,8 +418,8 @@ function CategoryView(props) {
         <div className="voxel-masonry" ref={masonryRef}>
           {visibleItems.map(function (m) {
             return (
-              <div key={m.id} className="voxel-masonry-item">
-                <ModelCard model={m} content={content} onOrder={function () { props.onOrderModel(m); }} onView={function () { props.onViewModel(m); }} onAddToCart={function () { props.onAddToCart(m); }} />
+              <div key={m.id} className="voxel-masonry-item" data-virtual-id={m.id}>
+                <ModelCard model={m} content={content} isActive={activeSet.has(m.id)} onOrder={function () { props.onOrderModel(m); }} onView={function () { props.onViewModel(m); }} onAddToCart={function () { props.onAddToCart(m); }} />
               </div>
             );
           })}
