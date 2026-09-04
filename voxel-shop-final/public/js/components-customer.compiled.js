@@ -244,7 +244,6 @@ function ShareButton(props) {
 function ModelCard(props) {
   var model = props.model;
   var content = props.content;
-  var isActive = props.isActive !== false;
   var isNew = content.showNewBadge !== false && isNewModel(model, content.newBadgeDays);
   return /*#__PURE__*/React.createElement("div", {
     onClick: props.onView,
@@ -260,7 +259,7 @@ function ModelCard(props) {
       minHeight: model.image ? undefined : 140,
       position: "relative"
     }
-  }, model.image ? isActive ? /*#__PURE__*/React.createElement("img", {
+  }, model.image ? /*#__PURE__*/React.createElement("img", {
     src: model.image,
     alt: model.name,
     loading: "lazy",
@@ -272,13 +271,6 @@ function ModelCard(props) {
       width: "100%",
       height: "auto",
       display: "block"
-    }
-  }) : /*#__PURE__*/React.createElement("div", {
-    className: "voxel-img-placeholder",
-    "data-ratio": imageRatioFor(model.id),
-    style: {
-      width: "100%",
-      aspectRatio: String(imageRatioFor(model.id))
     }
   }) : /*#__PURE__*/React.createElement(ImageIcon, {
     size: 26,
@@ -428,7 +420,6 @@ function HomeView(props) {
   });
   var recentPrints = content.recentPrints || [];
   var featuredMasonryRef = React.useRef(null);
-  var featuredActive = useVirtualImages(featuredMasonryRef);
   return /*#__PURE__*/React.createElement("div", {
     className: "max-w-6xl mx-auto px-5 sm:px-8"
   }, /*#__PURE__*/React.createElement("section", {
@@ -457,12 +448,10 @@ function HomeView(props) {
   }, featured.map(function (m) {
     return /*#__PURE__*/React.createElement("div", {
       key: m.id,
-      className: "voxel-masonry-item",
-      "data-virtual-id": m.id
+      className: "voxel-masonry-item"
     }, /*#__PURE__*/React.createElement(ModelCard, {
       model: m,
       content: content,
-      isActive: featuredActive.has(m.id),
       onOrder: function () {
         props.onOrderModel(m);
       },
@@ -569,7 +558,6 @@ function CategoryView(props) {
     return (m.name || "").toLowerCase().indexOf(q) !== -1 || (m.description || "").toLowerCase().indexOf(q) !== -1;
   }) : items;
   var masonryRef = React.useRef(null);
-  var activeSet = useVirtualImages(masonryRef);
   return /*#__PURE__*/React.createElement("div", {
     className: "max-w-6xl mx-auto px-5 sm:px-8 py-10"
   }, /*#__PURE__*/React.createElement("button", {
@@ -618,12 +606,10 @@ function CategoryView(props) {
   }, visibleItems.map(function (m) {
     return /*#__PURE__*/React.createElement("div", {
       key: m.id,
-      className: "voxel-masonry-item",
-      "data-virtual-id": m.id
+      className: "voxel-masonry-item"
     }, /*#__PURE__*/React.createElement(ModelCard, {
       model: m,
       content: content,
-      isActive: activeSet.has(m.id),
       onOrder: function () {
         props.onOrderModel(m);
       },
